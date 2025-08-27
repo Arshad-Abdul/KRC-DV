@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import Plot from 'react-plotly.js';
 import apiService from './services/api.js';
 import iithLogo from  "./assets/krc.png";
@@ -113,6 +114,10 @@ export default function Dashboard() {
             <h2 className="sub-title">Research Data Visualization</h2>
             <p className="institute-name">Indian Institute of Technology Hyderabad</p>
           </div>
+          <nav className="dashboard-nav">
+            <Link to="/" className="nav-link active">OpenAlex Dashboard</Link>
+            <Link to="/scopus-dashboard" className="nav-link">Scopus Dashboard</Link>
+          </nav>
         </div>
       </header>
 

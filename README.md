@@ -2,6 +2,25 @@
 
 A comprehensive and interactive dashboard for visualizing research output data from IIT Hyderabad using the Scopus API. This dashboard provides real-time insights into publications, citations, collaborations, and research trends.
 
+## 🏫 Campus Deployment
+
+This dashboard is optimized for **IIT Hyderabad campus network** with IP-based Scopus subscription access. No additional proxy configuration is required when running on campus infrastructure.
+
+### Quick Start (Campus Network)
+```bash
+# Windows
+start-campus.bat
+
+# Linux/Mac  
+./start-campus.sh
+
+# Manual start
+npm install
+npm run dev
+```
+
+The dashboard will automatically access Scopus API through the campus IP-based subscription.
+
 ## 🌟 Features
 
 ### Header
