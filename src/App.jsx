@@ -1,17 +1,24 @@
 import React from 'react';
-import Dashboard from './Dashboard.jsx';
-import ScopusDashboard from './ScopusDashboard';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import './Dashboard.css';
+import { DashboardCacheProvider } from './contexts/DashboardCacheContext';
+
+import ScopusDashboard from './pages/Scopus/ScopusDashboard.jsx';
+import OpenAlexDashboard from './pages/OpenAlex/OpenAlexDashboard.jsx';
+import Header from './components/header/header.jsx';
+import { Footer } from './components/footer/footer.jsx';
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/scopus-dashboard" element={<ScopusDashboard />} />
-      </Routes>
-    </Router>
+    <DashboardCacheProvider>
+      <Router>
+        <Header />
+        <Routes>
+          <Route path="/" element={<OpenAlexDashboard />} />
+          <Route path="/scopus-dashboard" element={<ScopusDashboard />} />
+        </Routes>
+      </Router>
+      <Footer />
+    </DashboardCacheProvider>
   );
 }
 

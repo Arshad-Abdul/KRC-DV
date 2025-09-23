@@ -63,7 +63,7 @@ class ScopusApiService {
   }
 
   // Search for publications by author Scopus IDs within date range
-  async searchPublications(scopusIds, startMonth, endMonth, year = new Date().getFullYear()) {
+  async searchPublications(scopusIds, startMonth, endMonth, year = new Date().getFullYear(), searchMode = 'department') {
     if (!scopusIds || scopusIds.length === 0) {
       throw new Error('No Scopus IDs provided');
     }
@@ -71,6 +71,17 @@ class ScopusApiService {
     // Format date range for Scopus API (YYYY format for year range)
     const startDate = `${year}${startMonth.toString().padStart(2, '0')}01`;
     const endDate = `${year}${endMonth.toString().padStart(2, '0')}31`;
+
+    console.log(`🔍 Date filtering: ${startMonth}/${year} to ${endMonth}/${year}`);
+    console.log(`📅 Formatted dates: ${startDate} to ${endDate}`);
+    console.log(`🎯 Search mode: ${searchMode}`);
+    
+    // Determine filtering strategy based on date range
+    const isFullYear = (startMonth === 1 && endMonth === 12);
+    const useMonthFiltering = !isFullYear; // Use month filtering for both individual and department when not full year
+    
+    console.log(`📊 Full year query: ${isFullYear}`);
+    console.log(`🗓️ Using month filtering: ${useMonthFiltering}`);
 
     // Scopus API limit: Maximum ~10-15 author IDs per query to avoid "exceeds maximum allowed" error
     const BATCH_SIZE = 10;
@@ -88,8 +99,17 @@ class ScopusApiService {
         // Build author query for this batch
         const authorQuery = batch.map(id => `AU-ID(${id})`).join(' OR ');
         
-        // Build complete search query
-        const searchQuery = `(${authorQuery}) AND AFFILORG(${IITH_AFFILIATION_ID}) AND PUBYEAR = ${year} AND PUBDATETXT(${startDate}-${endDate})`;
+        // Build search query with date filtering
+        let searchQuery;
+        if (useMonthFiltering) {
+          // Use PUBDATETXT for month-range filtering (both individual and department)
+          searchQuery = `${authorQuery} AND PUBDATETXT AFT ${startDate} AND PUBDATETXT BEF ${endDate}`;
+          console.log(`📅 ${searchMode} mode - using month filtering (${startMonth}/${year} to ${endMonth}/${year}):`, searchQuery);
+        } else {
+          // Use PUBYEAR for full year queries (both individual and department)
+          searchQuery = `${authorQuery} AND PUBYEAR = ${year}`;
+          console.log(`� ${searchMode} mode - using year filtering (${year}):`, searchQuery);
+        }
         
         const encodedQuery = encodeURIComponent(searchQuery);
         // Reduced field list to avoid query complexity limits
@@ -97,12 +117,41 @@ class ScopusApiService {
 
         const data = await this.makeRequest(url);
         
+        console.log('Raw Scopus API response:', data);
+        console.log('Search results structure:', data['search-results']);
+        console.log('Total results:', data['search-results']['opensearch:totalResults']);
+        
         const batchResults = parseInt(data['search-results']['opensearch:totalResults']) || 0;
-        const batchEntries = data['search-results']['entry'] || [];
+        let batchEntries = data['search-results']['entry'] || [];
         
         console.log(`Batch ${Math.floor(i/BATCH_SIZE) + 1} results: ${batchResults} publications`);
         
-        totalResults += batchResults;
+        // If month filtering returned 0 results, try fallback to year-only for this batch
+        if (useMonthFiltering && batchResults === 0 && i === 0) {
+          console.log('⚠️ Month filtering returned 0 results, trying fallback to year-only for comparison...');
+          const fallbackQuery = `${authorQuery} AND PUBYEAR = ${year}`;
+          console.log('🔄 Fallback query:', fallbackQuery);
+          
+          const fallbackUrl = `${SCOPUS_BASE_URL}/search/scopus?query=${encodeURIComponent(fallbackQuery)}&count=200&sort=citedby-count&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess&view=STANDARD`;
+          const fallbackData = await this.makeRequest(fallbackUrl);
+          
+          const fallbackResults = parseInt(fallbackData['search-results']['opensearch:totalResults']) || 0;
+          const fallbackEntries = fallbackData['search-results']['entry'] || [];
+          
+          console.log(`📊 Year-only fallback results: ${fallbackResults} publications`);
+          
+          if (fallbackResults > 0) {
+            console.log('✅ Using year-only results and will filter by month client-side for both individual and department searches');
+            batchEntries = fallbackEntries;
+            totalResults += fallbackResults;
+          } else {
+            console.log('❌ Even year-only query returned 0 results');
+            totalResults += batchResults;
+          }
+        } else {
+          totalResults += batchResults;
+        }
+        
         allEntries.push(...batchEntries);
 
         // Add delay between batches to respect rate limits
@@ -162,21 +211,29 @@ class ScopusApiService {
   }
 
   // Process publication entries to extract useful information
-  processPublications(entries) {
-    return entries.map((entry, index) => {
-      // Extract authors
-      const authors = entry['dc:creator'] ? 
-        (Array.isArray(entry['dc:creator']) ? entry['dc:creator'] : [entry['dc:creator']])
-          .map(creator => typeof creator === 'string' ? creator : creator['$'])
-          .join(', ') : 'Unknown Authors';
+  processPublications(entries, filterYear = null, startMonth = null, endMonth = null) {
+    if (!entries || entries.length === 0) {
+      return [];
+    }
+    
+    console.log(`🔧 Processing ${entries.length} publications with filters: year=${filterYear}, months=${startMonth}-${endMonth}`);
+    
+    return entries
+      .filter(entry => entry && entry['dc:title']) // Filter out empty/invalid entries
+      .map((entry, index) => {
+        // Extract authors
+        const authors = entry['dc:creator'] ? 
+          (Array.isArray(entry['dc:creator']) ? entry['dc:creator'] : [entry['dc:creator']])
+            .map(creator => typeof creator === 'string' ? creator : creator['$'])
+            .join(', ') : 'Unknown Authors';
 
-      // Extract publication date
-      const coverDate = entry['prism:coverDate'] || '';
-      const year = coverDate ? new Date(coverDate).getFullYear() : new Date().getFullYear();
-      const month = coverDate ? new Date(coverDate).getMonth() + 1 : 1;
+        // Extract publication date
+        const coverDate = entry['prism:coverDate'] || '';
+        const year = coverDate ? new Date(coverDate).getFullYear() : new Date().getFullYear();
+        const month = coverDate ? new Date(coverDate).getMonth() + 1 : 1;
 
-      // Check if open access
-      const isOpenAccess = entry['openaccess'] === '1' || entry['openaccess'] === 1;
+        // Check if open access
+        const isOpenAccess = entry['openaccess'] === '1' || entry['openaccess'] === 1;
 
       // Extract DOI and create URL
       const doi = entry['prism:doi'] || '';
@@ -198,6 +255,37 @@ class ScopusApiService {
         keywords: entry['authkeywords'] || '',
         abstract: entry['dc:description'] ? entry['dc:description'].substring(0, 200) + '...' : ''
       };
+    })
+    .filter(pub => {
+      // Additional year filtering to ensure we only show publications from the selected year
+      if (filterYear && pub.year !== filterYear) {
+        console.log(`Filtering out publication from ${pub.year}, expected ${filterYear}: ${pub.title.substring(0, 50)}...`);
+        return false;
+      }
+      
+      // Additional month filtering (client-side) if specified
+      if (startMonth && endMonth && filterYear) {
+        const pubMonth = pub.month;
+        const start = parseInt(startMonth);
+        const end = parseInt(endMonth);
+        
+        // Handle cases where end month might be less than start month (e.g., academic year)
+        let isInRange;
+        if (start <= end) {
+          // Normal range (e.g., March to June)
+          isInRange = pubMonth >= start && pubMonth <= end;
+        } else {
+          // Cross-year range (e.g., August to July - academic year)
+          isInRange = pubMonth >= start || pubMonth <= end;
+        }
+        
+        if (!isInRange) {
+          console.log(`Filtering out publication from month ${pubMonth}, expected ${start}-${end}: ${pub.title.substring(0, 50)}...`);
+          return false;
+        }
+      }
+      
+      return true;
     });
   }
 
@@ -240,14 +328,22 @@ class ScopusApiService {
   }
 
   // Main method to get department research data
-  async getDepartmentResearchData(scopusIds, startMonth, endMonth, year = new Date().getFullYear()) {
+  async getDepartmentResearchData(scopusIds, startMonth, endMonth, year = new Date().getFullYear(), searchMode = 'department') {
     try {
       console.log(`Fetching research data for ${scopusIds.length} faculty members`);
       console.log(`Date range: ${year}-${startMonth.toString().padStart(2, '0')} to ${year}-${endMonth.toString().padStart(2, '0')}`);
+      console.log(`Search mode: ${searchMode}`);
 
-      // Get publications
-      const publicationsData = await this.searchPublications(scopusIds, startMonth, endMonth, year);
-      const processedPublications = this.processPublications(publicationsData.entries);
+      // Get publications with mode-specific filtering
+      const publicationsData = await this.searchPublications(scopusIds, startMonth, endMonth, year, searchMode);
+      console.log(`Raw publications data:`, publicationsData);
+      console.log(`Total results found: ${publicationsData.totalResults}`);
+      console.log(`Entries found: ${publicationsData.entries?.length || 0}`);
+      
+      const processedPublications = this.processPublications(publicationsData.entries, year, startMonth, endMonth);
+      console.log(`Processed publications: ${processedPublications.length}`);
+      console.log('Sample processed publication:', processedPublications[0]);
+      console.log('All processed publications:', processedPublications);
 
       // Get author details for H-index calculation (limit to first 10 to avoid too many API calls)
       const limitedScopusIds = scopusIds.slice(0, 10);
@@ -258,10 +354,10 @@ class ScopusApiService {
       const openAccessStats = this.calculateOpenAccessStats(processedPublications);
       const averageHIndex = this.calculateAverageHIndex(authorsData);
 
-      return {
+      const result = {
         publications: {
-          count: publicationsData.totalResults,
-          details: `${publicationsData.totalResults} publications found`,
+          count: processedPublications.length, // Use actual processed count instead of totalResults
+          details: `${processedPublications.length} publications found`,
           articles: processedPublications
         },
         journalStats: {
@@ -274,6 +370,9 @@ class ScopusApiService {
         openAccessStats: openAccessStats,
         authorsData: authorsData
       };
+
+      console.log(`Final result structure:`, result);
+      return result;
 
     } catch (error) {
       console.error('Error fetching department research data:', error);

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import Plot from 'react-plotly.js';
-import apiService from './services/api.js';
-import iithLogo from  "./assets/krc.png";
-import './Dashboard.css';
+import { useOpenAlexData } from '../../hooks/useOpenAlexData';
+import Navigation from '../../components/Navigation/Navigation';
+
+import './OpenAlexDashboard.css';
 
 // Dashboard Components
 const StatsCard = ({ title, value, icon, color, loading }) => (
@@ -32,7 +33,15 @@ const PublicationItem = ({ publication, index }) => (
   <div className="publication-item">
     <div className="publication-rank">{index + 1}</div>
     <div className="publication-content">
-      <h4 className="publication-title">{publication.title}</h4>
+      <h4 className="publication-title">
+        {publication.url ? (
+          <a href={publication.url} target="_blank" rel="noopener noreferrer" className="publication-link">
+            {publication.title}
+          </a>
+        ) : (
+          publication.title
+        )}
+      </h4>
       <p className="publication-meta">
         <span><strong>Authors:</strong> {publication.authors}</span> •
         <span><strong>Journal:</strong> {publication.journal}</span> •
@@ -45,81 +54,14 @@ const PublicationItem = ({ publication, index }) => (
 );
 
 // Main Dashboard Component
-export default function Dashboard() {
-  const [dashboardData, setDashboardData] = useState({
-    totalPublications: 0,
-    totalCitations: 0,
-    hIndex: 0,
-    openAccessCount: 0,
-    latestPublications: [],
-    topContributors: [],
-    yearlyPublications: [],
-    yearlyCitations: [],
-    subjectDistribution: [],
-    topCitedPublications: [],
-    collaboratorCountries: [],
-    publicationTypes: [],
-    topPublishers: [],
-    fundingAgencies: []
-  });
-  
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Fetch all data
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await apiService.getAllDashboardData();
-        setDashboardData(data);
-      } catch (err) {
-        console.error('Dashboard Error:', err);
-        setError('Failed to load dashboard data. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  const retryFetch = () => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await apiService.getAllDashboardData();
-        setDashboardData(data);
-      } catch (err) {
-        setError('Failed to load dashboard data. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  };
+export default function OpenAlexDashboard() {
+  const { dashboardData, loading, error, retryFetch } = useOpenAlexData();
 
   return (
     <div className="dashboard-container">
-      {/* Header */}
-      <header className="dashboard-header">
-        <div className="header-content">
-          <a href="https://library.iith.ac.in" target="_blank" rel="noopener noreferrer">
-            <img src={iithLogo} alt="IIT Hyderabad Logo" className="logo" />
-          </a>
-          <div className="header-text">
-            <h1 className="main-title">Knowledge Resource Center</h1>
-            <h2 className="sub-title">Research Data Visualization</h2>
-            <p className="institute-name">Indian Institute of Technology Hyderabad</p>
-          </div>
-          <nav className="dashboard-nav">
-            <Link to="/" className="nav-link active">OpenAlex Dashboard</Link>
-            <Link to="/scopus-dashboard" className="nav-link">Scopus Dashboard</Link>
-          </nav>
-        </div>
-      </header>
+      <div className="nav-container">
+        <Navigation />
+      </div>
 
       {/* Error Message */}
       {error && (
@@ -193,10 +135,10 @@ export default function Dashboard() {
               layout={{
                 title: 'Top Ten Contributor',
                 height: 500,
-                margin: { l: 20, r: 35, t: 35, b: 35 },
+                margin: { l: 100, r: 20, t: 35, b: 35 },
                 xaxis: { title: 'Top author Count' },
                 yaxis: { title: 'Author' },
-                font: { size: 12 },
+                font: { size: 10 },
                 paper_bgcolor: '#54d215'
               }}
               config={{ responsive: true, displayModeBar: false }}
@@ -206,23 +148,40 @@ export default function Dashboard() {
         </DashboardBox>
 
         {/* 3. Research Progress (Yearly Publications) */}
-        <DashboardBox title="Research Progress (Last 10 Years)" loading={loading}>
+        <DashboardBox title="Research Progress (2008 - Present)" loading={loading}>
           <div className="chart-container">
             <Plot
               data={[{
                 x: dashboardData.yearlyPublications.map(y => y.year),
                 y: dashboardData.yearlyPublications.map(y => y.count),
                 type: 'bar',
+                name: 'Publications',
                 marker: { color: '#10b981' },
                 text: dashboardData.yearlyPublications.map(y => y.count),
-                textposition: 'outside'
+                textposition: 'outside',
+                yaxis: 'y'
+              }, {
+                x: dashboardData.yearlyPublications.map(y => y.year),
+                y: dashboardData.yearlyPublications.map(y => y.citations),
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Citations',
+                line: { color: '#ef4444', width: 3 },
+                marker: { color: '#ef4444', size: 6 },
+                yaxis: 'y2'
               }]}
               layout={{
                 height: 400,
                 margin: { l: 50, r: 50, t: 20, b: 50 },
                 xaxis: { title: 'Year' },
-                yaxis: { title: 'Number of Publications' },
-                font: { size: 12 }
+                yaxis: { title: 'Number of Publications', side: 'left' },
+                yaxis2: {
+                  title: 'Number of Citations',
+                  overlaying: 'y',
+                  side: 'right'
+                },
+                font: { size: 12 },
+                legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.02 }
               }}
               config={{ responsive: true, displayModeBar: false }}
               style={{ width: '100%', height: '400px' }}
@@ -259,25 +218,40 @@ export default function Dashboard() {
         </DashboardBox>
 
         {/* 5. Citations by Year */}
-        <DashboardBox title="Citations by Year" loading={loading}>
+        <DashboardBox title="Citations and Publications by Year" loading={loading}>
           <div className="chart-container">
             <Plot
               data={[{
-                x: dashboardData.yearlyCitations.map(y => y.year),
-                y: dashboardData.yearlyCitations.map(y => y.citations),
+                x: dashboardData.yearlyPublications.map(y => y.year),
+                y: dashboardData.yearlyPublications.map(y => y.citations),
                 type: 'scatter',
                 mode: 'lines+markers',
+                name: 'Citations',
                 line: { color: '#f59e0b', width: 3 },
                 marker: { color: '#f59e0b', size: 8 },
                 fill: 'tonexty',
-                fillcolor: 'rgba(245, 158, 11, 0.1)'
+                fillcolor: 'rgba(245, 158, 11, 0.1)',
+                yaxis: 'y'
+              }, {
+                x: dashboardData.yearlyPublications.map(y => y.year),
+                y: dashboardData.yearlyPublications.map(y => y.count),
+                type: 'bar',
+                name: 'Publications',
+                marker: { color: '#10b981', opacity: 0.7 },
+                yaxis: 'y2'
               }]}
               layout={{
                 height: 400,
                 margin: { l: 50, r: 50, t: 20, b: 50 },
                 xaxis: { title: 'Year' },
-                yaxis: { title: 'Total Citations' },
-                font: { size: 12 }
+                yaxis: { title: 'Total Citations', side: 'left' },
+                yaxis2: {
+                  title: 'Publications',
+                  overlaying: 'y',
+                  side: 'right'
+                },
+                font: { size: 12 },
+                legend: { orientation: 'h', x: 0.5, xanchor: 'center', y: 1.02 }
               }}
               config={{ responsive: true, displayModeBar: false }}
               style={{ width: '100%', height: '400px' }}
@@ -292,7 +266,15 @@ export default function Dashboard() {
               <div key={index} className="cited-publication-item">
                 <div className="citation-rank">{index + 1}</div>
                 <div>
-                  <h4 className="cited-publication-title">{pub.title}</h4>
+                  <h4 className="cited-publication-title">
+                    {pub.url ? (
+                      <a href={pub.url} target="_blank" rel="noopener noreferrer" className="publication-link">
+                        {pub.title}
+                      </a>
+                    ) : (
+                      pub.title
+                    )}
+                  </h4>
                   <p className="cited-publication-meta">
                     <strong>Citations:</strong> {pub.citations} | 
                     <strong> Authors:</strong> {pub.authors} | 
@@ -312,7 +294,7 @@ export default function Dashboard() {
                 x: dashboardData.collaboratorCountries.map(c => c.country),
                 y: dashboardData.collaboratorCountries.map(c => c.count),
                 type: 'bar',
-                marker: { color: '#8b5cf6' },
+                marker: { color: '#5631abff' },
                 text: dashboardData.collaboratorCountries.map(c => c.count),
                 textposition: 'outside'
               }]}
@@ -324,7 +306,7 @@ export default function Dashboard() {
                   tickangle: -45
                 },
                 yaxis: { title: 'Number of Collaborations' },
-                font: { size: 12 }
+                font: { size: 11 }
               }}
               config={{ responsive: true, displayModeBar: false }}
               style={{ width: '100%', height: '400px' }}
@@ -340,18 +322,18 @@ export default function Dashboard() {
                 labels: dashboardData.publicationTypes.map(t => t.type),
                 values: dashboardData.publicationTypes.map(t => t.count),
                 type: 'pie',
-                hole: 0.3,
+                hole: 0.1,
                 marker: {
                   colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
                 },
                 textinfo: 'label+percent',
-                textposition: 'outside'
+                textposition: ''
               }]}
               layout={{
                 height: 400,
-                margin: { l: 50, r: 50, t: 20, b: 50 },
+                margin: { l: 50, r: 50, t: 100, b: 50 },
                 font: { size: 10 },
-                showlegend: false
+                showlegend: true
               }}
               config={{ responsive: true, displayModeBar: false }}
               style={{ width: '100%', height: '400px' }}
@@ -360,25 +342,25 @@ export default function Dashboard() {
         </DashboardBox>
 
         {/* 10. Top Publishers */}
-        <DashboardBox title="Top 15 Publishers" loading={loading}>
+        <DashboardBox title="Top 10 Publishers" loading={loading}>
           <div className="chart-container">
             <Plot
               data={[{
-                x: dashboardData.topPublishers.slice(0, 15).map(p => p.count),
+                x: dashboardData.topPublishers.slice(0, 15).map(p => p.count).sort((a, b) => a - b),
                 y: dashboardData.topPublishers.slice(0, 15).map(p => 
                   p.publisher.length > 35 ? p.publisher.substring(0, 35) + '...' : p.publisher
-                ),
+                ).sort(),
                 type: 'bar',
                 orientation: 'h',
                 marker: { color: '#06b6d4' },
-                text: dashboardData.topPublishers.slice(0, 15).map(p => p.count),
-                textposition: 'outside'
+                text: dashboardData.topPublishers.slice(0, 15).map(p => p.count).sort((a, b) => a - b),
+                textposition: 'inside'
               }]}
               layout={{
                 height: 400,
                 margin: { l: 180, r: 50, t: 20, b: 50 },
-                xaxis: { title: 'Number of Publications' },
-                yaxis: { title: '' },
+                // xaxis: { title: 'Number of Publications' },
+                // yaxis: { title: '' },
                 font: { size: 10 }
               }}
               config={{ responsive: true, displayModeBar: false }}
@@ -406,12 +388,12 @@ export default function Dashboard() {
                   line: { width: 1, color: '#ffffff' }
                 },
                 text: dashboardData.fundingAgencies.map(f => f.count),
-                textposition: 'outside',
+                textposition: 'inside',
                 hovertemplate: '<b>%{x}</b><br>Grants: %{y}<extra></extra>'
               }]}
               layout={{
                 height: 400,
-                margin: { l: 50, r: 50, t: 20, b: 120 },
+                margin: { l: 50, r: 50, t: 20, b: 150 },
                 xaxis: { 
                   title: 'Funding Agency',
                   tickangle: -45,
@@ -433,10 +415,7 @@ export default function Dashboard() {
         </DashboardBox>
       </div>
 
-      {/* Footer */}
-      <footer className="dashboard-footer">
-        <p>&copy; Knowledge Resource Center, IIT Hyderabad</p>
-      </footer>
+      
     </div>
   );
 }
