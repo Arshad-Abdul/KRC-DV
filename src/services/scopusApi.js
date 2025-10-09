@@ -112,8 +112,8 @@ class ScopusApiService {
         }
         
         const encodedQuery = encodeURIComponent(searchQuery);
-        // Reduced field list to avoid query complexity limits
-        const url = `${SCOPUS_BASE_URL}/search/scopus?query=${encodedQuery}&count=200&sort=citedby-count&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess&view=STANDARD`;
+        // Include DOI and document type fields - using correct Scopus field names
+        const url = `${SCOPUS_BASE_URL}/search/scopus?query=${encodedQuery}&count=200&sort=citedby-count&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description&view=STANDARD`;
 
         const data = await this.makeRequest(url);
         
@@ -132,7 +132,7 @@ class ScopusApiService {
           const fallbackQuery = `${authorQuery} AND PUBYEAR = ${year}`;
           console.log('🔄 Fallback query:', fallbackQuery);
           
-          const fallbackUrl = `${SCOPUS_BASE_URL}/search/scopus?query=${encodeURIComponent(fallbackQuery)}&count=200&sort=citedby-count&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess&view=STANDARD`;
+          const fallbackUrl = `${SCOPUS_BASE_URL}/search/scopus?query=${encodeURIComponent(fallbackQuery)}&count=200&sort=citedby-count&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description&view=STANDARD`;
           const fallbackData = await this.makeRequest(fallbackUrl);
           
           const fallbackResults = parseInt(fallbackData['search-results']['opensearch:totalResults']) || 0;
@@ -221,6 +221,12 @@ class ScopusApiService {
     return entries
       .filter(entry => entry && entry['dc:title']) // Filter out empty/invalid entries
       .map((entry, index) => {
+        // Debug: Log the first entry to see available fields
+        if (index === 0) {
+          console.log('🔍 Sample entry fields:', Object.keys(entry));
+          console.log('🔍 Sample entry data:', entry);
+        }
+        
         // Extract authors
         const authors = entry['dc:creator'] ? 
           (Array.isArray(entry['dc:creator']) ? entry['dc:creator'] : [entry['dc:creator']])
@@ -240,6 +246,9 @@ class ScopusApiService {
       const scopusId = entry['dc:identifier'] ? entry['dc:identifier'].replace('SCOPUS_ID:', '') : '';
       const url = doi ? `https://doi.org/${doi}` : `https://www.scopus.com/record/display.uri?eid=2-s2.0-${scopusId}`;
 
+      // Extract document type - try different possible field names
+      const documentType = entry['subtypeDescription'] || entry['subtype'] || entry['prism:aggregationType'] || 'Article';
+
       return {
         id: index + 1,
         title: entry['dc:title'] || 'Untitled',
@@ -253,7 +262,8 @@ class ScopusApiService {
         citedByCount: parseInt(entry['citedby-count']) || 0,
         scopusId: scopusId,
         keywords: entry['authkeywords'] || '',
-        abstract: entry['dc:description'] ? entry['dc:description'].substring(0, 200) + '...' : ''
+        abstract: entry['dc:description'] ? entry['dc:description'].substring(0, 200) + '...' : '',
+        documentType: documentType
       };
     })
     .filter(pub => {
@@ -345,14 +355,22 @@ class ScopusApiService {
       console.log('Sample processed publication:', processedPublications[0]);
       console.log('All processed publications:', processedPublications);
 
-      // Get author details for H-index calculation (limit to first 10 to avoid too many API calls)
-      const limitedScopusIds = scopusIds.slice(0, 10);
-      const authorsData = await this.getMultipleAuthorsDetails(limitedScopusIds);
+      // Get author details for H-index calculation only for individual faculty searches
+      let authorsData = [];
+      let averageHIndex = 0;
+      
+      if (searchMode === 'individual') {
+        console.log('🔍 Individual faculty search - calculating H-index');
+        const limitedScopusIds = scopusIds.slice(0, 10);
+        authorsData = await this.getMultipleAuthorsDetails(limitedScopusIds);
+        averageHIndex = this.calculateAverageHIndex(authorsData);
+      } else {
+        console.log('🏢 Department search - skipping H-index calculation for performance');
+      }
 
       // Calculate statistics
       const journalStats = this.calculateJournalStats(processedPublications);
       const openAccessStats = this.calculateOpenAccessStats(processedPublications);
-      const averageHIndex = this.calculateAverageHIndex(authorsData);
 
       const result = {
         publications: {

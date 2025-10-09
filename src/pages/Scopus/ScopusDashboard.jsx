@@ -39,21 +39,26 @@ const ScopusDashboard = () => {
   // Export functionality
   const exportToCSV = (articles, filename = 'scopus_publications') => {
     const filteredArticles = getFilteredArticles(articles);
-    const csvHeaders = ['Title', 'Authors', 'Journal', 'Year', 'Month', 'Citations', 'Open Access', 'DOI', 'Keywords'];
+    const csvHeaders = ['Title', 'Authors', 'Journal', 'Year', 'Month', 'Citations', 'Open Access', 'DOI', 'DOI_URL', 'Document Type', 'Keywords'];
     
     const csvContent = [
       csvHeaders.join(','),
-      ...filteredArticles.map(article => [
-        `"${article.title.replace(/"/g, '""')}"`,
-        `"${article.authors.replace(/"/g, '""')}"`,
-        `"${article.journal.replace(/"/g, '""')}"`,
-        article.year,
-        article.month,
-        article.citedByCount || 0,
-        article.isOpenAccess ? 'Yes' : 'No',
-        `"${article.doi || ''}"`,
-        `"${article.keywords || ''}"`
-      ].join(','))
+      ...filteredArticles.map(article => {
+        const doiUrl = article.doi ? `https://doi.org/${article.doi}` : (article.url || '');
+        return [
+          `"${article.title.replace(/"/g, '""')}"`,
+          `"${article.authors.replace(/"/g, '""')}"`,
+          `"${article.journal.replace(/"/g, '""')}"`,
+          article.year,
+          article.month,
+          article.citedByCount || 0,
+          article.isOpenAccess ? 'Yes' : 'No',
+          `"${article.doi || ''}"`,
+          `"${doiUrl}"`,
+          `"${article.documentType || 'Article'}"`,
+          `"${article.keywords || ''}"`
+        ].join(',');
+      })
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -92,7 +97,18 @@ const ScopusDashboard = () => {
         totalCitations: filteredArticles.reduce((sum, article) => sum + (article.citedByCount || 0), 0),
         openAccessCount: filteredArticles.filter(article => article.isOpenAccess).length
       },
-      publications: filteredArticles
+      publications: filteredArticles.map(article => ({
+        ...article,
+        // Enhance DOI information for better usability
+        doiUrl: article.doi ? `https://doi.org/${article.doi}` : null,
+        clickableUrl: article.doi ? `https://doi.org/${article.doi}` : article.url,
+        // Add metadata for applications that might process this JSON
+        links: {
+          doi: article.doi ? `https://doi.org/${article.doi}` : null,
+          scopus: article.url || null,
+          primary: article.doi ? `https://doi.org/${article.doi}` : article.url
+        }
+      }))
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -100,6 +116,80 @@ const ScopusDashboard = () => {
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
     link.setAttribute('download', `${filename}.json`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportToHTML = (articles, filename = 'scopus_publications') => {
+    const filteredArticles = getFilteredArticles(articles);
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scopus Publications Export</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .header { background-color: #f5f5f5; padding: 20px; margin-bottom: 20px; }
+        .publication { border: 1px solid #ddd; margin: 10px 0; padding: 15px; }
+        .title { font-weight: bold; font-size: 1.1em; margin-bottom: 10px; }
+        .meta { margin: 5px 0; }
+        .doi-link { color: #0066cc; text-decoration: none; }
+        .doi-link:hover { text-decoration: underline; }
+        .open-access { background-color: #4caf50; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.8em; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Scopus Publications Export</h1>
+        <p><strong>Department:</strong> ${selectedDept}</p>
+        <p><strong>Date Range:</strong> ${months.find(m => m.value === startMonth)?.label} - ${months.find(m => m.value === endMonth)?.label} ${searchYear}</p>
+        <p><strong>Total Publications:</strong> ${filteredArticles.length}</p>
+        <p><strong>Export Date:</strong> ${new Date().toLocaleDateString()}</p>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Authors</th>
+                <th>Journal</th>
+                <th>Year</th>
+                <th>Type</th>
+                <th>Citations</th>
+                <th>DOI</th>
+                <th>Access</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${filteredArticles.map(article => `
+                <tr>
+                    <td><strong>${article.title}</strong></td>
+                    <td>${article.authors}</td>
+                    <td>${article.journal}</td>
+                    <td>${article.year}</td>
+                    <td>${article.documentType || 'Article'}</td>
+                    <td>${article.citedByCount || 0}</td>
+                    <td>${article.doi ? `<a href="https://doi.org/${article.doi}" target="_blank" class="doi-link">${article.doi}</a>` : 'N/A'}</td>
+                    <td>${article.isOpenAccess ? '<span class="open-access">Open Access</span>' : 'Subscription'}</td>
+                </tr>
+            `).join('')}
+        </tbody>
+    </table>
+</body>
+</html>`;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${filename}.html`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -168,19 +258,8 @@ const ScopusDashboard = () => {
       const openAccessCount = facultyArticles.filter(article => article.isOpenAccess).length;
       const openAccessPercentage = facultyArticles.length > 0 ? (openAccessCount / facultyArticles.length) * 100 : 0;
 
-      // Calculate H-index for this faculty
-      const sortedCitations = facultyArticles
-        .map(article => article.citedByCount || 0)
-        .sort((a, b) => b - a);
-      
-      let hIndex = 0;
-      for (let i = 0; i < sortedCitations.length; i++) {
-        if (sortedCitations[i] >= i + 1) {
-          hIndex = i + 1;
-        } else {
-          break;
-        }
-      }
+      // H-index calculation removed (only available for individual faculty searches)
+      const hIndex = 0;
 
       return {
         name: faculty.name,
@@ -446,11 +525,16 @@ const ScopusDashboard = () => {
         totalCount: researchData.publications.count
       });
       
-      setHIndex({
-        value: researchData.hIndex.value,
-        department: selectedDept,
-        basedOnAuthors: researchData.hIndex.basedOnAuthors
-      });
+      // Only set H-index for individual faculty searches
+      if (searchMode === 'individual') {
+        setHIndex({
+          value: researchData.hIndex.value,
+          department: selectedDept,
+          basedOnAuthors: researchData.hIndex.basedOnAuthors
+        });
+      } else {
+        setHIndex(null); // Clear H-index for department searches
+      }
       
       setOpenAccessStats(researchData.openAccessStats);
       setJournalStats(researchData.journalStats);
@@ -527,13 +611,13 @@ const ScopusDashboard = () => {
               id="department"
               value={selectedDept} 
               onChange={(e) => setSelectedDept(e.target.value)}
-            >
-              <option value="">Choose Department</option>
-              {departments.map(dept => (
-                <option key={dept} value={dept}>{dept}</option>
-              ))}
-            </select>
-          </div>
+              >
+                <option value="">Choose Department</option>
+                {departments.map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+            </div>
 
           {searchMode === 'individual' && selectedDept && (
             <div className="control-group">
@@ -606,9 +690,13 @@ const ScopusDashboard = () => {
           <button 
             className="fetch-button" 
             onClick={handleFetchData}
-            disabled={currentLoading || !selectedDept || !startMonth || !endMonth || !searchYear || (searchMode === 'individual' && !selectedFaculty)}
+            disabled={currentLoading || 
+              !selectedDept || 
+              !startMonth || !endMonth || !searchYear || 
+              (searchMode === 'individual' && !selectedFaculty)}
           >
-            {currentLoading ? 'Fetching...' : `Fetch ${searchMode === 'individual' ? 'Faculty' : 'Department'} Data`}
+            {currentLoading ? 'Fetching...' : 
+              `Fetch ${searchMode === 'individual' ? 'Faculty' : 'Department'} Data`}
           </button>
         </div>
 
@@ -740,8 +828,10 @@ const ScopusDashboard = () => {
         </div>
       )}
 
-      {!currentLoading && (publications !== null || hIndex || openAccessStats) && (
+      {!currentLoading && (publications !== null || (hIndex && searchMode === 'individual') || openAccessStats) && (
         <>
+
+
           <div className="stats-grid">
             {publications !== null && (
               <div className="stat-card">
@@ -753,13 +843,13 @@ const ScopusDashboard = () => {
               </div>
             )}
 
-            {hIndex && (
+            {hIndex && searchMode === 'individual' && (
               <div className="stat-card">
-                <h3>📈 Average H-Index</h3>
+                <h3>📈H-Index</h3>
                 <div className="stat-value h-index-value">
                   {hIndex.value}
                 </div>
-                <p>Based on {hIndex.basedOnAuthors || 'N/A'} faculty members</p>
+                <p>Individual Faculty H-Index</p>
               </div>
             )}
 
@@ -893,10 +983,10 @@ const ScopusDashboard = () => {
                 );
               })()}
 
-              {/* H-Index and Citation Summary */}
-              {hIndex && (
+              {/* H-Index and Citation Summary - Only for Individual Faculty */}
+              {hIndex && searchMode === 'individual' && (
                 <div className="chart-container">
-                  <h3>📊 Citation Metrics Summary</h3>
+                  <h3>📊 Individual Faculty Citation Metrics</h3>
                   {(() => {
                     const filteredArticles = getFilteredArticles(articlesData.articles);
                     return (
@@ -904,7 +994,7 @@ const ScopusDashboard = () => {
                         <div className="metric-card" style={{ background: '#e8f4fd', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                           <h4 style={{ color: '#1976d2', marginBottom: '10px' }}>📈 H-Index</h4>
                           <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#1976d2' }}>{hIndex.value}</div>
-                          <p style={{ color: '#666', fontSize: '0.9em' }}>Based on {hIndex.basedOnAuthors} authors</p>
+                          <p style={{ color: '#666', fontSize: '0.9em' }}>Individual Faculty Metric</p>
                         </div>
                         <div className="metric-card" style={{ background: '#f3e5f5', padding: '20px', borderRadius: '8px', textAlign: 'center' }}>
                           <h4 style={{ color: '#7b1fa2', marginBottom: '10px' }}>📊 Total Citations</h4>
@@ -931,6 +1021,303 @@ const ScopusDashboard = () => {
                     );
                   })()}
                 </div>
+              )}
+
+              {/* Institute-Specific Analytics Charts - Removed */}
+              {false && (
+                <>
+                  {/* Subject-wise Distribution Pie Chart */}
+                  <div className="chart-container">
+                    <h3>📊 Subject-wise Publication Distribution</h3>
+                    {(() => {
+                      const subjectData = {};
+                      const filteredArticles = getFilteredArticles(articlesData.articles);
+                      
+                      // Extract subject areas from publication names and journals
+                      filteredArticles.forEach(article => {
+                        // Simple subject classification based on keywords in title and journal
+                        const titleAndJournal = `${article.title} ${article.publicationName}`.toLowerCase();
+                        
+                        let subject = 'Other';
+                        if (titleAndJournal.includes('computer') || titleAndJournal.includes('software') || 
+                            titleAndJournal.includes('algorithm') || titleAndJournal.includes('data')) {
+                          subject = 'Computer Science';
+                        } else if (titleAndJournal.includes('electric') || titleAndJournal.includes('electronic') || 
+                                   titleAndJournal.includes('circuit') || titleAndJournal.includes('signal')) {
+                          subject = 'Electrical Engineering';
+                        } else if (titleAndJournal.includes('mechanical') || titleAndJournal.includes('material') || 
+                                   titleAndJournal.includes('manufacturing') || titleAndJournal.includes('thermal')) {
+                          subject = 'Mechanical Engineering';
+                        } else if (titleAndJournal.includes('chemical') || titleAndJournal.includes('catalyst') || 
+                                   titleAndJournal.includes('polymer') || titleAndJournal.includes('reaction')) {
+                          subject = 'Chemical Engineering';
+                        } else if (titleAndJournal.includes('bio') || titleAndJournal.includes('medical') || 
+                                   titleAndJournal.includes('health') || titleAndJournal.includes('drug')) {
+                          subject = 'Biomedical';
+                        } else if (titleAndJournal.includes('math') || titleAndJournal.includes('statistical') || 
+                                   titleAndJournal.includes('equation') || titleAndJournal.includes('optimization')) {
+                          subject = 'Mathematics';
+                        } else if (titleAndJournal.includes('physics') || titleAndJournal.includes('quantum') || 
+                                   titleAndJournal.includes('optical') || titleAndJournal.includes('laser')) {
+                          subject = 'Physics';
+                        } else if (titleAndJournal.includes('civil') || titleAndJournal.includes('construction') || 
+                                   titleAndJournal.includes('structural') || titleAndJournal.includes('concrete')) {
+                          subject = 'Civil Engineering';
+                        }
+                        
+                        subjectData[subject] = (subjectData[subject] || 0) + 1;
+                      });
+
+                      const subjects = Object.keys(subjectData);
+                      const counts = Object.values(subjectData);
+                      const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+
+                      return (
+                        <Plot
+                          data={[{
+                            values: counts,
+                            labels: subjects,
+                            type: 'pie',
+                            marker: { colors: colors },
+                            textinfo: 'label+percent+value',
+                            textposition: 'auto',
+                            hovertemplate: '<b>%{label}</b><br>Publications: %{value}<br>Percentage: %{percent}<extra></extra>'
+                          }]}
+                          layout={{
+                            autosize: true,
+                            title: 'Publications by Research Area',
+                            margin: { l: 50, r: 50, b: 50, t: 50 },
+                            paper_bgcolor: '#f9f9f9',
+                            font: { family: 'inherit', size: 12 }
+                          }}
+                          style={{ width: '100%', height: '500px' }}
+                          config={{ responsive: true }}
+                        />
+                      );
+                    })()}
+                  </div>
+
+                  {/* Document Type Distribution Pie Chart */}
+                  <div className="chart-container">
+                    <h3>📄 Document Type Distribution</h3>
+                    {(() => {
+                      const documentTypes = {};
+                      const filteredArticles = getFilteredArticles(articlesData.articles);
+                      
+                      // Extract document types from publication names
+                      filteredArticles.forEach(article => {
+                        const pubName = (article.publicationName || '').toLowerCase();
+                        let docType = 'Journal Article'; // Default
+                        
+                        if (pubName.includes('conference') || pubName.includes('proceedings') || 
+                            pubName.includes('workshop') || pubName.includes('symposium')) {
+                          docType = 'Conference Paper';
+                        } else if (pubName.includes('book') || pubName.includes('chapter')) {
+                          docType = 'Book Chapter';
+                        } else if (pubName.includes('review') || pubName.includes('survey')) {
+                          docType = 'Review Article';
+                        } else if (pubName.includes('patent')) {
+                          docType = 'Patent';
+                        } else if (pubName.includes('letter') || pubName.includes('communication')) {
+                          docType = 'Letter/Communication';
+                        }
+                        
+                        documentTypes[docType] = (documentTypes[docType] || 0) + 1;
+                      });
+
+                      const types = Object.keys(documentTypes);
+                      const counts = Object.values(documentTypes);
+                      const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
+
+                      return (
+                        <Plot
+                          data={[{
+                            values: counts,
+                            labels: types,
+                            type: 'pie',
+                            marker: { colors: colors },
+                            textinfo: 'label+percent+value',
+                            textposition: 'auto',
+                            hovertemplate: '<b>%{label}</b><br>Count: %{value}<br>Percentage: %{percent}<extra></extra>'
+                          }]}
+                          layout={{
+                            autosize: true,
+                            title: 'Publications by Document Type',
+                            margin: { l: 50, r: 50, b: 50, t: 50 },
+                            paper_bgcolor: '#f9f9f9',
+                            font: { family: 'inherit', size: 12 }
+                          }}
+                          style={{ width: '100%', height: '500px' }}
+                          config={{ responsive: true }}
+                        />
+                      );
+                    })()}
+                  </div>
+
+                  {/* Year-wise Publication Growth Bar Chart */}
+                  <div className="chart-container">
+                    <h3>📈 Year-wise Publication Growth (2008 - Present)</h3>
+                    {(() => {
+                      const yearData = {};
+                      const filteredArticles = getFilteredArticles(articlesData.articles);
+                      
+                      // Extract publication years and count them
+                      filteredArticles.forEach(article => {
+                        const pubDate = new Date(article.coverDate);
+                        const year = pubDate.getFullYear();
+                        if (year >= 2008) {
+                          yearData[year] = (yearData[year] || 0) + 1;
+                        }
+                      });
+
+                      // Fill in missing years from 2008 to current year with 0
+                      const currentYear = new Date().getFullYear();
+                      for (let year = 2008; year <= currentYear; year++) {
+                        if (!yearData[year]) {
+                          yearData[year] = 0;
+                        }
+                      }
+
+                      const years = Object.keys(yearData).sort();
+                      const counts = years.map(year => yearData[year]);
+
+                      return (
+                        <Plot
+                          data={[{
+                            x: years,
+                            y: counts,
+                            type: 'bar',
+                            marker: { 
+                              color: counts,
+                              colorscale: 'Viridis',
+                              showscale: true,
+                              colorbar: { title: 'Publications' }
+                            },
+                            text: counts.map(count => count.toString()),
+                            textposition: 'auto',
+                            hovertemplate: '<b>Year: %{x}</b><br>Publications: %{y}<extra></extra>'
+                          }]}
+                          layout={{
+                            autosize: true,
+                            title: 'Publication Growth Over Years',
+                            xaxis: { 
+                              title: 'Year',
+                              tickmode: 'linear',
+                              tick0: 2008,
+                              dtick: 2
+                            },
+                            yaxis: { title: 'Number of Publications' },
+                            margin: { l: 60, r: 50, b: 80, t: 50 },
+                            paper_bgcolor: '#f9f9f9',
+                            plot_bgcolor: '#fff',
+                            font: { family: 'inherit', size: 12 }
+                          }}
+                          style={{ width: '100%', height: '500px' }}
+                          config={{ responsive: true }}
+                        />
+                      );
+                    })()}
+                  </div>
+
+                  {/* Year-wise Citation Trend Line Chart */}
+                  <div className="chart-container">
+                    <h3>📊 Year-wise Citation Trends</h3>
+                    {(() => {
+                      const yearCitationData = {};
+                      const filteredArticles = getFilteredArticles(articlesData.articles);
+                      
+                      // Extract publication years and sum citations
+                      filteredArticles.forEach(article => {
+                        const pubDate = new Date(article.coverDate);
+                        const year = pubDate.getFullYear();
+                        if (year >= 2008) {
+                          if (!yearCitationData[year]) {
+                            yearCitationData[year] = { totalCitations: 0, publicationCount: 0 };
+                          }
+                          yearCitationData[year].totalCitations += (article.citedByCount || 0);
+                          yearCitationData[year].publicationCount += 1;
+                        }
+                      });
+
+                      // Fill in missing years from 2008 to current year
+                      const currentYear = new Date().getFullYear();
+                      for (let year = 2008; year <= currentYear; year++) {
+                        if (!yearCitationData[year]) {
+                          yearCitationData[year] = { totalCitations: 0, publicationCount: 0 };
+                        }
+                      }
+
+                      const years = Object.keys(yearCitationData).sort();
+                      const totalCitations = years.map(year => yearCitationData[year].totalCitations);
+                      const avgCitations = years.map(year => 
+                        yearCitationData[year].publicationCount > 0 
+                          ? yearCitationData[year].totalCitations / yearCitationData[year].publicationCount 
+                          : 0
+                      );
+
+                      return (
+                        <Plot
+                          data={[
+                            {
+                              x: years,
+                              y: totalCitations,
+                              type: 'scatter',
+                              mode: 'lines+markers',
+                              name: 'Total Citations',
+                              line: { color: '#e74c3c', width: 3 },
+                              marker: { size: 8, color: '#e74c3c' },
+                              hovertemplate: '<b>Year: %{x}</b><br>Total Citations: %{y}<extra></extra>',
+                              yaxis: 'y'
+                            },
+                            {
+                              x: years,
+                              y: avgCitations,
+                              type: 'scatter',
+                              mode: 'lines+markers',
+                              name: 'Average Citations per Paper',
+                              line: { color: '#3498db', width: 3 },
+                              marker: { size: 8, color: '#3498db' },
+                              hovertemplate: '<b>Year: %{x}</b><br>Avg Citations: %{y:.1f}<extra></extra>',
+                              yaxis: 'y2'
+                            }
+                          ]}
+                          layout={{
+                            autosize: true,
+                            title: 'Citation Trends by Publication Year',
+                            xaxis: { 
+                              title: 'Publication Year',
+                              tickmode: 'linear',
+                              tick0: 2008,
+                              dtick: 2
+                            },
+                            yaxis: { 
+                              title: 'Total Citations',
+                              side: 'left',
+                              color: '#e74c3c'
+                            },
+                            yaxis2: {
+                              title: 'Average Citations per Paper',
+                              side: 'right',
+                              overlaying: 'y',
+                              color: '#3498db'
+                            },
+                            margin: { l: 60, r: 60, b: 80, t: 50 },
+                            paper_bgcolor: '#f9f9f9',
+                            plot_bgcolor: '#fff',
+                            font: { family: 'inherit', size: 12 },
+                            legend: {
+                              x: 0.02,
+                              y: 0.98,
+                              bgcolor: 'rgba(255,255,255,0.8)'
+                            }
+                          }}
+                          style={{ width: '100%', height: '500px' }}
+                          config={{ responsive: true }}
+                        />
+                      );
+                    })()}
+                  </div>
+                </>
               )}
             </>
           )}
@@ -1058,38 +1445,7 @@ const ScopusDashboard = () => {
                       />
                     </div>
 
-                      {/* Faculty H-Index Comparison - Bar Chart */}
-                      <div className="chart-container">
-                        <h3>📈 Faculty H-Index Comparison</h3>
-                        <Plot
-                        data={[{
-                          x: facultyStats.map(f => f.name),
-                          y: facultyStats.map(f => f.hIndex),
-                          type: 'bar',
-                          marker: {
-                            color: facultyStats.map(f => f.hIndex),
-                            colorscale: 'Viridis',
-                            showscale: true,
-                            colorbar: { title: 'H-Index' }
-                          },
-                          hovertemplate: '<b>%{x}</b><br>H-Index: %{y}<br>Publications: %{text}<extra></extra>',
-                          text: facultyStats.map(f => `${f.publications} publications`),
-                          name: 'H-Index'
-                        }]}
-                        layout={{
-                          autosize: true,
-                          title: 'H-Index Comparison Across Faculty',
-                          xaxis: { title: 'Faculty', tickangle: -45 },
-                          yaxis: { title: 'H-Index' },
-                          margin: { l: 50, r: 30, b: 120, t: 50 },
-                          paper_bgcolor: '#f9f9f9',
-                          plot_bgcolor: '#fff',
-                          font: { family: 'inherit', size: 14 }
-                        }}
-                        style={{ width: '100%', height: '400px' }}
-                        config={{ responsive: true }}
-                      />
-                    </div>
+                      {/* Faculty H-Index Comparison - Removed (H-index only for individual faculty) */}
                     </div>
 
                     <div className="charts-grid">
@@ -1143,12 +1499,11 @@ const ScopusDashboard = () => {
                           z: [
                             facultyStats.map(f => f.publications),
                             facultyStats.map(f => f.citations),
-                            facultyStats.map(f => f.hIndex),
                             facultyStats.map(f => f.avgCitations),
                             facultyStats.map(f => f.openAccessPercentage)
                           ],
                           x: facultyStats.map(f => f.name),
-                          y: ['Publications', 'Total Citations', 'H-Index', 'Avg Citations', 'Open Access %'],
+                          y: ['Publications', 'Total Citations', 'Avg Citations', 'Open Access %'],
                           type: 'heatmap',
                           colorscale: 'RdYlBu_r',
                           showscale: true,
@@ -1188,7 +1543,6 @@ const ScopusDashboard = () => {
                               <th style={{ padding: '12px', textAlign: 'left', borderBottom: '2px solid #ddd' }}>Faculty</th>
                               <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #ddd' }}>Publications</th>
                               <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #ddd' }}>Citations</th>
-                              <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #ddd' }}>H-Index</th>
                               <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #ddd' }}>Avg Citations</th>
                               <th style={{ padding: '12px', textAlign: 'center', borderBottom: '2px solid #ddd' }}>Open Access %</th>
                             </tr>
@@ -1219,17 +1573,6 @@ const ScopusDashboard = () => {
                                     fontWeight: 'bold'
                                   }}>
                                     {faculty.citations}
-                                  </span>
-                                </td>
-                                <td style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid #eee' }}>
-                                  <span style={{ 
-                                    background: '#e8f5e8', 
-                                    padding: '4px 8px', 
-                                    borderRadius: '12px',
-                                    color: '#388e3c',
-                                    fontWeight: 'bold'
-                                  }}>
-                                    {faculty.hIndex}
                                   </span>
                                 </td>
                                 <td style={{ padding: '12px', textAlign: 'center', borderBottom: '1px solid #eee' }}>
@@ -1776,6 +2119,23 @@ const ScopusDashboard = () => {
                         >
                           💾 Export JSON
                         </button>
+                        <button
+                          onClick={() => exportToHTML(articlesData.articles)}
+                          style={{
+                            background: '#ff9800',
+                            color: 'white',
+                            border: 'none',
+                            padding: '8px 16px',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.9em',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px'
+                          }}
+                        >
+                          🌐 Export HTML
+                        </button>
                       </div>
                     </div>
                     {(searchKeywords || minCitations || maxCitations || openAccessOnly) && (
@@ -1808,6 +2168,7 @@ const ScopusDashboard = () => {
                               <p><strong>Authors:</strong> {article.authors}</p>
                               <p><strong>Journal:</strong> {article.journal}</p>
                               <p><strong>Published:</strong> {months.find(m => m.value === article.month.toString())?.label} {article.year}</p>
+                              {article.documentType && <p><strong>Type:</strong> {article.documentType}</p>}
                               {article.doi && <p><strong>DOI:</strong> <a href={article.url} target="_blank" rel="noopener noreferrer">{article.doi}</a></p>}
                               {article.keywords && <p><strong>Keywords:</strong> {article.keywords}</p>}
                               {article.abstract && <p className="article-abstract"><strong>Abstract:</strong> {article.abstract}</p>}
