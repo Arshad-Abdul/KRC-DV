@@ -87,6 +87,7 @@ class ScopusApiService {
     const BATCH_SIZE = 10;
     const allEntries = [];
     let totalResults = 0;
+    let useMonthFilteringGlobal = useMonthFiltering; // Track filtering strategy across all batches
 
     console.log(`Processing ${scopusIds.length} faculty members in batches of ${BATCH_SIZE}`);
 
@@ -101,14 +102,14 @@ class ScopusApiService {
         
         // Build search query with date filtering
         let searchQuery;
-        if (useMonthFiltering) {
+        if (useMonthFilteringGlobal) {
           // Use PUBDATETXT for month-range filtering (both individual and department)
           searchQuery = `${authorQuery} AND PUBDATETXT AFT ${startDate} AND PUBDATETXT BEF ${endDate}`;
           console.log(`📅 ${searchMode} mode - using month filtering (${startMonth}/${year} to ${endMonth}/${year}):`, searchQuery);
         } else {
           // Use PUBYEAR for full year queries (both individual and department)
           searchQuery = `${authorQuery} AND PUBYEAR = ${year}`;
-          console.log(`� ${searchMode} mode - using year filtering (${year}):`, searchQuery);
+          console.log(`📊 ${searchMode} mode - using year filtering (${year}):`, searchQuery);
         }
         
         const encodedQuery = encodeURIComponent(searchQuery);
@@ -126,11 +127,11 @@ class ScopusApiService {
         
         console.log(`Batch ${Math.floor(i/BATCH_SIZE) + 1} results: ${batchResults} publications`);
         
-        // If month filtering returned 0 results, try fallback to year-only for this batch
-        if (useMonthFiltering && batchResults === 0 && i === 0) {
-          console.log('⚠️ Month filtering returned 0 results, trying fallback to year-only for comparison...');
+        // If month filtering returned 0 results on first batch, switch to year-only for ALL batches
+        if (useMonthFilteringGlobal && batchResults === 0 && i === 0) {
+          console.log('⚠️ Month filtering returned 0 results on first batch, switching to year-only for ALL remaining batches...');
           const fallbackQuery = `${authorQuery} AND PUBYEAR = ${year}`;
-          console.log('🔄 Fallback query:', fallbackQuery);
+          console.log('🔄 Fallback query for first batch:', fallbackQuery);
           
           const fallbackUrl = `${SCOPUS_BASE_URL}/search/scopus?query=${encodeURIComponent(fallbackQuery)}&count=200&sort=citedby-count&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description&view=STANDARD`;
           const fallbackData = await this.makeRequest(fallbackUrl);
@@ -138,14 +139,15 @@ class ScopusApiService {
           const fallbackResults = parseInt(fallbackData['search-results']['opensearch:totalResults']) || 0;
           const fallbackEntries = fallbackData['search-results']['entry'] || [];
           
-          console.log(`📊 Year-only fallback results: ${fallbackResults} publications`);
+          console.log(`📊 Year-only fallback results for first batch: ${fallbackResults} publications`);
           
           if (fallbackResults > 0) {
-            console.log('✅ Using year-only results and will filter by month client-side for both individual and department searches');
+            console.log('✅ Year-only query works! Switching to year-only for ALL remaining batches and will filter by month client-side');
             batchEntries = fallbackEntries;
             totalResults += fallbackResults;
+            useMonthFilteringGlobal = false; // Switch to year-only for all remaining batches
           } else {
-            console.log('❌ Even year-only query returned 0 results');
+            console.log('❌ Even year-only query returned 0 results for first batch');
             totalResults += batchResults;
           }
         } else {
