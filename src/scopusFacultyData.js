@@ -10,7 +10,8 @@ export const facultyByDept = {
     { name: 'Ganesh Sambhaji Ghalme', scopusId: '57190071706', empId: 'F293' },
     { name: 'Konda Reddy Mopuri', scopusId: '57024033600', empId: 'F326' },
     { name: 'Rekha Raja', scopusId: '54585810200', empId: 'F340' },
-    { name: 'Karthik P. N.', scopusId: '57202668260', empId: 'F345' }
+    { name: 'Karthik P. N.', scopusId: '57202668260', empId: 'F345' },
+    { name: 'Gogulapati Sreedurga', scopusId: '57698613700', empId: 'F384' }
   ],
   BME: [
     { name: 'Renu John', scopusId: '57201703336', empId: 'F055' },
@@ -161,7 +162,9 @@ export const facultyByDept = {
     { name: 'Rameshwar Pratap', scopusId: '55216677600', empId: 'F308' },
     { name: 'Shirshendu Das', scopusId: '55389489000', empId: 'F330' },
     { name: 'Ashish Mishra', scopusId: '57327859000', empId: 'F346' },
-    { name: 'Saurabh Kumar', scopusId: '57218172745', empId: 'F355' }
+    { name: 'Saurabh Kumar', scopusId: '57218172745', empId: 'F355' },
+    { name: 'Anupam Sanghi', scopusId:'57205164131', empId: 'F381' },
+    { name: 'Abhijit Das', scopusId: '57214490565', empId: 'F382' }
   ],
   DES: [
     { name: 'Prasad S Onkar', scopusId: '37115760000', empId: 'F128' },
@@ -218,7 +221,8 @@ export const facultyByDept = {
     { name: 'Lohithaksha Maniraj Maiyar', scopusId: '55990543600', empId: 'F270' },
     { name: 'RanaPratap Maradana', scopusId: '57192941099', empId: 'F314' },
     { name: 'Jayshree Patnaik', scopusId: '57204846655', empId: 'F317' },
-    { name: 'Rajesh Ittamalla', scopusId: '57203883708', empId: 'F318' }
+    { name: 'Rajesh Ittamalla', scopusId: '57203883708', empId: 'F318' },
+    { name: 'Puram Praveen', scopusId:'57224408018', empId: 'F380' }
   ],
   LA: [
     { name: 'Prabheesh, K. P.', scopusId: '57216608272', empId: 'F007' },
@@ -326,7 +330,8 @@ export const facultyByDept = {
     { name: 'Suresh Kumar Garlapati', scopusId: '55951490000', empId: 'F252' },
     { name: 'Ashok Kamaraj', scopusId: '57217988259', empId: 'F282' },
     { name: 'Anuj Goyal', scopusId: '55767576200', empId: 'F329' },
-    { name: 'Suresh Perumal', scopusId: '56926321800', empId: 'F335' }
+    { name: 'Suresh Perumal', scopusId: '56926321800', empId: 'F335' },
+    { name: 'Varanasi Rama Srinivas', scopusId: '57202981163', empId: 'F383' }
   ],
   PHY: [
     { name: 'Anjan Kumar Giri', scopusId: '7102961266', empId: 'F009' },
