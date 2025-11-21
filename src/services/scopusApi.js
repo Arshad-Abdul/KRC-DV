@@ -314,8 +314,7 @@ class ScopusApiService {
 
     return Object.entries(journalCounts)
       .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10); // Top 10 journals
+      .sort((a, b) => b.count - a.count); // Return all journals, sorted by count
   }
 
   // Calculate open access statistics

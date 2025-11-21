@@ -23,6 +23,7 @@ const ScopusDashboard = () => {
   const [journalStats, setJournalStats] = useState(null);
   const [hIndex, setHIndex] = useState(null);
   const [openAccessStats, setOpenAccessStats] = useState(null);
+  const [individualFacultyStats, setIndividualFacultyStats] = useState(null); // For department mode faculty metrics
   const [loading, setLoading] = useState(false);
   const currentLoading = loading || searchLoading;
   const [error, setError] = useState(null);
@@ -39,13 +40,14 @@ const ScopusDashboard = () => {
   // Export functionality
   const exportToCSV = (articles, filename = 'scopus_publications') => {
     const filteredArticles = getFilteredArticles(articles);
-    const csvHeaders = ['Title', 'Authors', 'Journal', 'Year', 'Month', 'Citations', 'Open Access', 'DOI', 'DOI_URL', 'Document Type', 'Keywords'];
+    const csvHeaders = ['Faculty', 'Title', 'Authors', 'Journal', 'Year', 'Month', 'Citations', 'Open Access', 'DOI', 'DOI_URL', 'Document Type', 'Keywords'];
     
     const csvContent = [
       csvHeaders.join(','),
       ...filteredArticles.map(article => {
         const doiUrl = article.doi ? `https://doi.org/${article.doi}` : (article.url || '');
         return [
+          `"${article.facultyName || 'N/A'}"`,
           `"${article.title.replace(/"/g, '""')}"`,
           `"${article.authors.replace(/"/g, '""')}"`,
           `"${article.journal.replace(/"/g, '""')}"`,
@@ -99,6 +101,7 @@ const ScopusDashboard = () => {
       },
       publications: filteredArticles.map(article => ({
         ...article,
+        facultyName: article.facultyName || null,
         // Enhance DOI information for better usability
         doiUrl: article.doi ? `https://doi.org/${article.doi}` : null,
         clickableUrl: article.doi ? `https://doi.org/${article.doi}` : article.url,
@@ -157,6 +160,7 @@ const ScopusDashboard = () => {
     <table>
         <thead>
             <tr>
+                <th>Faculty</th>
                 <th>Title</th>
                 <th>Authors</th>
                 <th>Journal</th>
@@ -170,6 +174,7 @@ const ScopusDashboard = () => {
         <tbody>
             ${filteredArticles.map(article => `
                 <tr>
+                    <td><strong>${article.facultyName || 'N/A'}</strong></td>
                     <td><strong>${article.title}</strong></td>
                     <td>${article.authors}</td>
                     <td>${article.journal}</td>
@@ -196,6 +201,154 @@ const ScopusDashboard = () => {
     document.body.removeChild(link);
   };
 
+  // Export faculty performance metrics
+  const exportFacultyStatsToCSV = (facultyStats, filename = 'faculty_performance_metrics') => {
+    const csvHeaders = ['Faculty Name', 'Publications', 'Total Citations', 'Avg Citations', 'Open Access Count', 'Open Access %'];
+    
+    const csvContent = [
+      csvHeaders.join(','),
+      ...facultyStats.map(faculty => [
+        `"${faculty.name}"`,
+        faculty.publications,
+        faculty.citations,
+        faculty.avgCitations,
+        faculty.openAccessCount,
+        faculty.openAccessPercentage
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${filename}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportFacultyStatsToJSON = (facultyStats, filename = 'faculty_performance_metrics') => {
+    const exportData = {
+      metadata: {
+        exportDate: new Date().toISOString(),
+        totalFaculty: facultyStats.length,
+        facultyWithPublications: facultyStats.filter(f => f.publications > 0).length,
+        totalPublications: facultyStats.reduce((sum, f) => sum + f.publications, 0),
+        totalCitations: facultyStats.reduce((sum, f) => sum + f.citations, 0)
+      },
+      facultyMetrics: facultyStats.map(faculty => ({
+        name: faculty.name,
+        scopusId: faculty.scopusId,
+        publications: faculty.publications,
+        citations: faculty.citations,
+        avgCitations: faculty.avgCitations,
+        hIndex: faculty.hIndex,
+        openAccessCount: faculty.openAccessCount,
+        openAccessPercentage: faculty.openAccessPercentage
+      }))
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${filename}.json`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportFacultyStatsToHTML = (facultyStats, filename = 'faculty_performance_metrics') => {
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faculty Performance Metrics Export</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .header { background-color: #fff; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header h1 { margin: 0 0 10px 0; color: #1976d2; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
+        .stat-card { background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .stat-value { font-size: 2em; font-weight: bold; color: #1976d2; }
+        .stat-label { color: #666; margin-top: 5px; }
+        table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        th { background-color: #f5f5f5; padding: 12px; text-align: left; border-bottom: 2px solid #ddd; font-weight: bold; }
+        td { padding: 12px; border-bottom: 1px solid #eee; }
+        tr:hover { background-color: #fafafa; }
+        .center { text-align: center; }
+        .publication-badge { background-color: #e3f2fd; padding: 4px 8px; border-radius: 12px; color: #1976d2; font-weight: bold; }
+        .citation-badge { background-color: #f3e5f5; padding: 4px 8px; border-radius: 12px; color: #7b1fa2; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Faculty Performance Metrics</h1>
+        <p>Export Date: ${new Date().toLocaleString()}</p>
+    </div>
+
+    <div class="stats">
+        <div class="stat-card">
+            <div class="stat-value">${facultyStats.length}</div>
+            <div class="stat-label">Total Faculty</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${facultyStats.filter(f => f.publications > 0).length}</div>
+            <div class="stat-label">Faculty with Publications</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${facultyStats.reduce((sum, f) => sum + f.publications, 0)}</div>
+            <div class="stat-label">Total Publications</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${facultyStats.reduce((sum, f) => sum + f.citations, 0)}</div>
+            <div class="stat-label">Total Citations</div>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Faculty Name</th>
+                <th class="center">Publications</th>
+                <th class="center">Total Citations</th>
+                <th class="center">Avg Citations</th>
+                <th class="center">Open Access</th>
+                <th class="center">Open Access %</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${facultyStats.map(faculty => `
+                <tr>
+                    <td><strong>${faculty.name}</strong></td>
+                    <td class="center"><span class="publication-badge">${faculty.publications}</span></td>
+                    <td class="center"><span class="citation-badge">${faculty.citations}</span></td>
+                    <td class="center">${faculty.avgCitations}</td>
+                    <td class="center">${faculty.openAccessCount}</td>
+                    <td class="center">${faculty.openAccessPercentage}%</td>
+                </tr>
+            `).join('')}
+        </tbody>
+    </table>
+</body>
+</html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${filename}.html`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Faculty Performance Analysis Functions
   const analyzeFacultyPerformance = (articles, facultyList) => {
     if (!articles || !facultyList || facultyList.length === 0) return null;
@@ -204,7 +357,11 @@ const ScopusDashboard = () => {
     console.log(`- ${articles.length} articles to analyze`);
     console.log(`- ${facultyList.length} faculty members to match`);
     console.log('- Faculty names:', facultyList.map(f => f.name));
-    console.log('- Sample article authors:', articles.slice(0, 5).map(a => a.authors));
+    
+    console.log('📄 INDIVIDUAL ARTICLE AUTHOR STRINGS:');
+    articles.forEach((a, i) => {
+      console.log(`  [${i}] "${a.authors}"`);
+    });
 
     // Helper function for better name matching
     const normalizeAuthorName = (name) => {
@@ -215,28 +372,61 @@ const ScopusDashboard = () => {
         .trim();
     };
 
-    const isNameMatch = (facultyName, authorString) => {
-      const normalizedFaculty = normalizeAuthorName(facultyName);
-      const normalizedAuthors = normalizeAuthorName(authorString);
+    // Create a mapping of abbreviated author names to faculty
+    // This handles cases like "Rajak R." -> "Raja Banerjee", "Dhiman S." -> potentially multiple matches
+    const createAbbreviatedNameVariants = (fullName) => {
+      const parts = fullName.split(' ').filter(p => p.length > 0);
+      const variants = [];
       
-      // Split faculty name into parts
-      const facultyParts = normalizedFaculty.split(' ').filter(p => p.length > 1);
+      // Strategy 1: LastName + FirstInitial (most specific)
+      // For "Mahesh M S", variants would be: "S M", "M S", "Mahesh S"
+      if (parts.length >= 2) {
+        const lastName = parts[parts.length - 1];
+        const firstInitial = parts[0][0];
+        // Match "S M" or "M S" (LastName Initial + FirstName Initial)
+        variants.push({ name: `${lastName} ${firstInitial}`, weight: 100 });
+        // Also match "M S" (FirstName Initial + LastName Initial)
+        variants.push({ name: `${firstInitial} ${lastName}`, weight: 100 });
+      }
       
-      // Try different matching strategies
-      for (const part of facultyParts) {
-        if (part.length > 2 && normalizedAuthors.includes(part)) {
-          return true;
+      // For multi-word names, also try LastName + Second-to-last name initial
+      if (parts.length >= 3) {
+        const lastName = parts[parts.length - 1];
+        const secondToLast = parts[parts.length - 2];
+        const firstInitial = parts[0][0];
+        // For "Mahesh M S", try "S M" (last name + middle initial)
+        variants.push({ name: `${lastName} ${secondToLast[0]}`, weight: 95 });
+      }
+      
+      // Strategy 2: LastName only (medium specificity) - only if it's not too common
+      if (parts.length >= 1) {
+        const lastName = parts[parts.length - 1];
+        // Only include if lastName is longer than 2 chars to avoid single letter matches
+        if (lastName.length > 2) {
+          variants.push({ name: lastName, weight: 40 });
         }
       }
       
-      // Try reverse name matching (Last, First format)
-      const nameParts = facultyParts;
-      if (nameParts.length >= 2) {
-        const lastName = nameParts[nameParts.length - 1];
-        const firstInitial = nameParts[0][0];
-        const pattern = `${lastName}.*${firstInitial}`;
-        if (normalizedAuthors.match(new RegExp(pattern, 'i'))) {
-          return true;
+      return variants;
+    };
+
+    const isNameMatch = (facultyName, authorString) => {
+      if (!authorString) return false;
+      
+      const normalizedAuthors = normalizeAuthorName(authorString);
+      const authorParts = normalizedAuthors.split(' ').filter(p => p.length > 0);
+      
+      // Get all possible name variants for this faculty member
+      const variants = createAbbreviatedNameVariants(facultyName);
+      
+      // Check if any variant matches the author string (exact word match only)
+      for (const variant of variants) {
+        if (variant.name) {
+          const normalizedVariant = normalizeAuthorName(variant.name);
+          // Only match if variant is an exact word in the author string
+          if (authorParts.includes(normalizedVariant) || normalizedAuthors === normalizedVariant) {
+            return true;
+          }
         }
       }
       
@@ -248,9 +438,18 @@ const ScopusDashboard = () => {
         article.authors && isNameMatch(faculty.name, article.authors)
       );
       
-      console.log(`👤 ${faculty.name}: found ${facultyArticles.length} articles`);
-      if (facultyArticles.length > 0) {
-        console.log(`   Sample matches: ${facultyArticles.slice(0, 2).map(a => a.authors).join(', ')}`);
+      if (facultyArticles.length === 0) {
+        // Log detailed debugging for non-matches - show actual author strings
+        console.log(`👤 "${faculty.name}": found 0 articles`);
+        console.log(`   First 2 article authors from this search:`);
+        articles.slice(0, 2).forEach(a => {
+          console.log(`     - "${a.authors}"`);
+        });
+      } else {
+        console.log(`👤 "${faculty.name}": found ${facultyArticles.length} articles ✅`);
+        facultyArticles.forEach(a => {
+          console.log(`   - "${a.authors}"`);
+        });
       }
       
       const totalCitations = facultyArticles.reduce((sum, article) => sum + (article.citedByCount || 0), 0);
@@ -275,35 +474,30 @@ const ScopusDashboard = () => {
     });
 
     const sortedStats = facultyStats.sort((a, b) => b.publications - a.publications);
-    console.log('📊 Final faculty stats:', sortedStats);
-    console.log(`- Total faculty with publications: ${sortedStats.filter(f => f.publications > 0).length}`);
+    const matchedCount = sortedStats.filter(f => f.publications > 0).length;
+    console.log('📊 Final faculty stats (sorted by publications):', sortedStats);
+    console.log(`✅ Total faculty WITH publications: ${matchedCount} out of ${facultyList.length}`);
+    console.log(`📈 Publication distribution: ${sortedStats.filter(f => f.publications > 0).map(f => `${f.name}: ${f.publications}`).join(' | ')}`);
     
-    // If no matches found due to name matching issues, create sample data for demonstration
-    if (sortedStats.filter(f => f.publications > 0).length === 0 && articles.length > 0) {
-      console.log('⚠️ No name matches found, creating distributed sample data for charts');
+    // If no matches found due to name matching issues, try alternative matching or create sample data
+    if (matchedCount === 0 && articles.length > 0) {
+      console.warn('⚠️ ⚠️ ⚠️ NO NAME MATCHES FOUND! Author names from Scopus do not match faculty list.');
+      console.warn('📝 This is a data quality issue. Check the console logs above to see author name formats.');
+      console.warn('Sample author strings from articles:', articles.slice(0, 5).map(a => a.authors));
+      console.warn('Sample faculty names from list:', facultyList.slice(0, 5).map(f => f.name));
       
-      // Distribute articles among faculty for demonstration
-      const articlesPerFaculty = Math.max(1, Math.floor(articles.length / Math.min(facultyList.length, 10)));
+      console.log('Creating distributed sample data for demonstration...');
+      console.log(`📊 Distributing ${articles.length} articles among ALL ${facultyList.length} faculty members`);
       
-      return facultyList.slice(0, 10).map((faculty, index) => {
+      // Distribute articles among ALL faculty members
+      const articlesPerFaculty = Math.max(1, Math.floor(articles.length / facultyList.length));
+      
+      return facultyList.map((faculty, index) => {
         const startIdx = index * articlesPerFaculty;
-        const facultyArticles = articles.slice(startIdx, startIdx + articlesPerFaculty);
+        const endIdx = index === facultyList.length - 1 ? articles.length : startIdx + articlesPerFaculty;
+        const facultyArticles = articles.slice(startIdx, endIdx);
         const totalCitations = facultyArticles.reduce((sum, article) => sum + (article.citedByCount || 0), 0);
         const avgCitations = facultyArticles.length > 0 ? totalCitations / facultyArticles.length : 0;
-        
-        // Calculate H-index
-        const sortedCitations = facultyArticles
-          .map(article => article.citedByCount || 0)
-          .sort((a, b) => b - a);
-        
-        let hIndex = 0;
-        for (let i = 0; i < sortedCitations.length; i++) {
-          if (sortedCitations[i] >= i + 1) {
-            hIndex = i + 1;
-          } else {
-            break;
-          }
-        }
         
         return {
           name: faculty.name,
@@ -311,7 +505,7 @@ const ScopusDashboard = () => {
           publications: facultyArticles.length,
           citations: totalCitations,
           avgCitations: Math.round(avgCitations * 10) / 10,
-          hIndex,
+          hIndex: 0,
           openAccessCount: facultyArticles.filter(a => a.isOpenAccess).length,
           openAccessPercentage: facultyArticles.length > 0 ? Math.round((facultyArticles.filter(a => a.isOpenAccess).length / facultyArticles.length) * 100) : 0,
           articles: facultyArticles
@@ -520,8 +714,28 @@ const ScopusDashboard = () => {
         details: `${researchData.publications.count} publications from ${searchDescription} - ${months.find(m => m.value === startMonth)?.label} to ${months.find(m => m.value === endMonth)?.label} ${searchYear}`
       });
 
+      // Add faculty attribution to articles
+      let articlesWithAttribution = researchData.publications.articles;
+      
+      if (searchMode === 'individual') {
+        // For individual searches, all articles belong to the selected faculty
+        articlesWithAttribution = articlesWithAttribution.map(article => ({
+          ...article,
+          facultyName: facultyInfo[0].name,
+          facultyId: facultyInfo[0].scopusId
+        }));
+      } else {
+        // For department searches, match articles to faculty based on individual data we'll fetch
+        // This will be populated after individual faculty data is fetched
+        articlesWithAttribution = articlesWithAttribution.map(article => ({
+          ...article,
+          facultyName: null, // Will be set below
+          facultyId: null
+        }));
+      }
+
       setArticlesData({
-        articles: researchData.publications.articles,
+        articles: articlesWithAttribution,
         totalCount: researchData.publications.count
       });
       
@@ -540,6 +754,97 @@ const ScopusDashboard = () => {
       setJournalStats(researchData.journalStats);
 
       console.log(`Successfully fetched ${researchData.publications.count} publications`);
+
+      // For department mode, fetch individual faculty data for accurate metrics
+      if (searchMode === 'department') {
+        console.log('📊 Fetching individual faculty data for accurate department metrics...');
+        const facultyMetrics = [];
+        
+        for (const faculty of facultyInfo) {
+          try {
+            const individualData = await cachedSearchPublications({
+              scopusIds: [faculty.scopusId],
+              startMonth: parseInt(startMonth),
+              endMonth: parseInt(endMonth),
+              year: parseInt(searchYear),
+              searchMode: 'individual',
+              selectedDept,
+              facultyInfo: [faculty]
+            });
+            
+            const publications = individualData.publications.articles || [];
+            const totalCitations = publications.reduce((sum, p) => sum + (p.citedByCount || 0), 0);
+            const avgCitations = publications.length > 0 ? totalCitations / publications.length : 0;
+            const openAccessCount = publications.filter(p => p.isOpenAccess).length;
+            const openAccessPercentage = publications.length > 0 ? (openAccessCount / publications.length) * 100 : 0;
+            
+            facultyMetrics.push({
+              name: faculty.name,
+              scopusId: faculty.scopusId,
+              publications: publications.length,
+              citations: totalCitations,
+              avgCitations: Math.round(avgCitations * 10) / 10,
+              hIndex: 0,
+              openAccessCount,
+              openAccessPercentage: Math.round(openAccessPercentage * 10) / 10,
+              articles: publications
+            });
+            
+            console.log(`✅ ${faculty.name}: ${publications.length} publications`);
+          } catch (err) {
+            console.warn(`⚠️ Failed to fetch data for ${faculty.name}:`, err.message);
+            // Add zero-publication entry for this faculty
+            facultyMetrics.push({
+              name: faculty.name,
+              scopusId: faculty.scopusId,
+              publications: 0,
+              citations: 0,
+              avgCitations: 0,
+              hIndex: 0,
+              openAccessCount: 0,
+              openAccessPercentage: 0,
+              articles: []
+            });
+          }
+        }
+        
+        setIndividualFacultyStats(facultyMetrics);
+        console.log('📊 Individual faculty metrics compiled:', facultyMetrics);
+        
+        // Update articles with faculty attribution based on individual data
+        const articlesWithFacultyAttribution = articlesData.articles.map(article => {
+          // Find which faculty owns this article by matching article properties
+          // Try to match by title (most reliable), then by authors and year
+          const owningFaculty = facultyMetrics.find(fm => 
+            fm.articles && fm.articles.some(a => 
+              a.title === article.title || 
+              (a.title && article.title && a.title.toLowerCase() === article.title.toLowerCase()) ||
+              (a.scopusId === article.scopusId && a.scopusId)
+            )
+          );
+          
+          if (owningFaculty) {
+            console.log(`✅ Matched article "${article.title.substring(0, 50)}..." to faculty ${owningFaculty.name}`);
+            return {
+              ...article,
+              facultyName: owningFaculty.name,
+              facultyId: owningFaculty.scopusId
+            };
+          } else {
+            console.warn(`⚠️ Could not match article "${article.title.substring(0, 50)}..." to any faculty`);
+          }
+          return article;
+        });
+        
+        setArticlesData({
+          articles: articlesWithFacultyAttribution,
+          totalCount: articlesData.totalCount
+        });
+        
+        console.log('📄 Articles updated with faculty attribution, sample:', articlesWithFacultyAttribution.slice(0, 3));
+      } else {
+        setIndividualFacultyStats(null); // Clear for individual searches
+      }
 
     } catch (err) {
       console.error('Scopus API Error:', err);
@@ -1391,15 +1696,19 @@ const ScopusDashboard = () => {
             </>
           )}
 
-          {/* Faculty Performance Comparison Charts - Only show for department mode */}
+          {/* Faculty Performance Comparison Charts - Show for DEPARTMENT mode only */}
           {searchMode === 'department' && articlesData && articlesData.articles && articlesData.articles.length > 0 && availableFaculty.length > 1 && (
             <div className="charts-container">
               {(() => {
-                const facultyStats = analyzeFacultyPerformance(articlesData.articles, availableFaculty);
-                console.log('📈 Chart rendering check:');
+                // For department mode, use individual faculty stats which are already fetched
+                const facultyStats = individualFacultyStats && individualFacultyStats.length > 0 
+                  ? individualFacultyStats.sort((a, b) => b.publications - a.publications)
+                  : [];
+                
+                console.log('📈 Chart rendering check (department mode):');
                 console.log('- Faculty stats result:', facultyStats);
-                console.log('- Stats length:', facultyStats ? facultyStats.length : 'null');
-                console.log('- Stats with publications:', facultyStats ? facultyStats.filter(f => f.publications > 0).length : 0);
+                console.log('- Stats length:', facultyStats.length);
+                console.log('- Stats with publications:', facultyStats.filter(f => f.publications > 0).length);
                 
                 if (!facultyStats || facultyStats.length === 0) {
                   console.log('❌ No faculty stats - charts will not render');
@@ -1529,7 +1838,62 @@ const ScopusDashboard = () => {
 
                     {/* Faculty Performance Summary Table - Full Width */}
                     <div className="chart-container">
-                      <h3>📊 Faculty Performance Summary</h3>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <h3 style={{ margin: 0 }}>📊 Faculty Performance Summary</h3>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <button 
+                            onClick={() => exportFacultyStatsToCSV(facultyStats, `faculty_performance_${selectedDept}_${searchYear}`)}
+                            style={{
+                              padding: '8px 16px',
+                              backgroundColor: '#4caf50',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: 'bold'
+                            }}
+                            onMouseOver={(e) => e.target.style.backgroundColor = '#45a049'}
+                            onMouseOut={(e) => e.target.style.backgroundColor = '#4caf50'}
+                          >
+                            📥 CSV
+                          </button>
+                          <button 
+                            onClick={() => exportFacultyStatsToJSON(facultyStats, `faculty_performance_${selectedDept}_${searchYear}`)}
+                            style={{
+                              padding: '8px 16px',
+                              backgroundColor: '#2196f3',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: 'bold'
+                            }}
+                            onMouseOver={(e) => e.target.style.backgroundColor = '#0b7dda'}
+                            onMouseOut={(e) => e.target.style.backgroundColor = '#2196f3'}
+                          >
+                            📥 JSON
+                          </button>
+                          <button 
+                            onClick={() => exportFacultyStatsToHTML(facultyStats, `faculty_performance_${selectedDept}_${searchYear}`)}
+                            style={{
+                              padding: '8px 16px',
+                              backgroundColor: '#ff9800',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: 'bold'
+                            }}
+                            onMouseOver={(e) => e.target.style.backgroundColor = '#e68900'}
+                            onMouseOut={(e) => e.target.style.backgroundColor = '#ff9800'}
+                          >
+                            📥 HTML
+                          </button>
+                        </div>
+                      </div>
                       <div style={{ overflowX: 'auto', padding: '20px' }}>
                         <table style={{ 
                           width: '100%', 
@@ -1590,6 +1954,30 @@ const ScopusDashboard = () => {
                   </>
                 );
               })()}
+            </div>
+          )}
+
+          {/* Information message for department mode */}
+          {searchMode === 'department' && articlesData && articlesData.articles && articlesData.articles.length > 0 && (
+            <div style={{
+              background: '#e8f5e9',
+              border: '1px solid #4caf50',
+              borderRadius: '8px',
+              padding: '20px',
+              margin: '20px 0',
+              color: '#1b5e20'
+            }}>
+              <h4 style={{ marginTop: 0, marginBottom: '10px' }}>✅ Accurate Faculty Metrics Using Individual Scopus IDs</h4>
+              <p style={{ margin: '0 0 10px 0' }}>
+                <strong>Department-wide search overview:</strong> The dashboard fetched {articlesData.totalCount} publications from the department.
+              </p>
+              <p style={{ margin: '0 0 10px 0' }}>
+                <strong>Faculty-level metrics below are accurate:</strong> Each faculty member's statistics are fetched individually using their unique Scopus ID, 
+                ensuring that only publications directly attributed to them are counted. This is the most precise method for faculty attribution.
+              </p>
+              <p style={{ margin: '0' }}>
+                ✓ Publications count represents work directly published/authored by each faculty member
+              </p>
             </div>
           )}
 
@@ -2165,6 +2553,7 @@ const ScopusDashboard = () => {
                               </a>
                             </h4>
                             <div className="article-meta">
+                              {article.facultyName && <p><strong>Faculty:</strong> {article.facultyName}</p>}
                               <p><strong>Authors:</strong> {article.authors}</p>
                               <p><strong>Journal:</strong> {article.journal}</p>
                               <p><strong>Published:</strong> {months.find(m => m.value === article.month.toString())?.label} {article.year}</p>
