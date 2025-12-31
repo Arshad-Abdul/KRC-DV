@@ -41,20 +41,24 @@
 /* Main Statistics Grid */
 .main-stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 25px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 30px;
   margin-bottom: 50px;
 }
 
 .stats-card {
   background: white;
   border-radius: 12px;
-  padding: 30px;
+  padding: 40px 30px;
   text-align: center;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .stats-card:hover {
@@ -89,30 +93,33 @@
 }
 
 .card-icon {
-  font-size: 3em;
-  margin-bottom: 15px;
+  font-size: 3.5em;
+  margin-bottom: 20px;
 }
 
 .stats-card h2 {
-  font-size: 1em;
+  font-size: 0.95em;
   color: #666;
-  margin: 0 0 15px 0;
+  margin: 0 0 20px 0;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 1.2px;
 }
 
 .card-value {
-  font-size: 2.8em;
-  font-weight: 700;
+  font-size: 3.5em;
+  font-weight: 800;
   color: #1976d2;
-  margin: 15px 0;
+  margin: 20px 0;
+  line-height: 1.2;
+  word-break: break-word;
 }
 
 .card-subtitle {
   color: #999;
-  font-size: 0.9em;
-  margin: 10px 0 0 0;
+  font-size: 0.95em;
+  margin: 15px 0 0 0;
+  font-weight: 500;
 }
 
 /* Action Buttons */
@@ -444,7 +451,7 @@
 
   .main-stats-grid {
     grid-template-columns: 1fr;
-    gap: 15px;
+    gap: 20px;
   }
 
   .action-buttons {
@@ -454,6 +461,15 @@
   .refresh-button,
   .export-button {
     width: 100%;
+  }
+
+  .stats-card {
+    padding: 30px 20px;
+    min-height: 250px;
+  }
+
+  .card-value {
+    font-size: 2.5em;
   }
 
   .department-table,
@@ -494,11 +510,16 @@
   }
 
   .card-value {
-    font-size: 2em;
+    font-size: 2.2em;
   }
 
   .stats-card {
-    padding: 20px;
+    padding: 20px 15px;
+    min-height: 220px;
+  }
+
+  .card-icon {
+    font-size: 2.5em;
   }
 
   .article-title {
