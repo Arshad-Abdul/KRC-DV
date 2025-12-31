@@ -19,13 +19,19 @@ const Navigation = () => {
       >
         Scopus Dashboard
       </Link>
+      <Link 
+        to="/institute-stats" 
+        className={`nav-link ${location.pathname === '/institute-stats' ? 'active' : ''}`}
+      >
+        Institute Statistics
+      </Link>
       <a 
         href="https://raiith.krc.iith.ac.in/" 
         target="_blank" 
         rel="noopener noreferrer" 
         className="nav-link external"
       >
-        IR Repository
+        RAIITH
       </a>
       <a 
         href="https://catalogue.krc.iith.ac.in/" 

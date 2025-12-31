@@ -398,6 +398,150 @@ class ScopusApiService {
       throw new Error(`Failed to fetch research data: ${error.message}`);
     }
   }
+
+  // Method to get institute-wide research data by affiliation
+  async getInstituteResearchData(startMonth = null, endMonth = null, year = null) {
+    try {
+      console.log(`🏫 Fetching institute-wide research data for IIT Hyderabad`);
+      
+      // Determine if fetching overall (all years) or specific year
+      const isOverall = (year === null || year === undefined);
+      
+      if (isOverall) {
+        console.log(`📊 Fetching OVERALL data across ALL YEARS`);
+      } else {
+        console.log(`Date range: ${year}-${startMonth.toString().padStart(2, '0')} to ${year}-${endMonth.toString().padStart(2, '0')}`);
+      }
+
+      let allEntries = [];
+      
+      if (isOverall) {
+        // For overall data, fetch year by year to avoid exceeding result limits
+        const currentYear = new Date().getFullYear();
+        const startYear = 2008; // IIT Hyderabad was established in 2008
+        
+        console.log(`📅 Fetching data year by year from ${startYear} to ${currentYear}`);
+        
+        for (let y = startYear; y <= currentYear; y++) {
+          console.log(`\n📅 Fetching data for year ${y}...`);
+          
+          try {
+            const yearQuery = `AF-ID("60103917") AND PUBYEAR = ${y}`;
+            const encodedQuery = encodeURIComponent(yearQuery);
+            
+            let yearEntries = [];
+            let totalResults = 0;
+            
+            // First request for this year
+            const firstUrl = `${SCOPUS_BASE_URL}/search/scopus?query=${encodedQuery}&count=200&sort=citedby-count&start=0&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description&view=STANDARD`;
+            
+            const firstData = await this.makeRequest(firstUrl);
+            totalResults = parseInt(firstData['search-results']['opensearch:totalResults']) || 0;
+            const firstEntries = firstData['search-results']['entry'] || [];
+            yearEntries = yearEntries.concat(firstEntries);
+            
+            console.log(`   Year ${y}: Found ${totalResults} publications (batch 1: ${firstEntries.length})`);
+            
+            // Fetch additional pages for this year if needed
+            if (totalResults > 200) {
+              const pageCount = Math.ceil(totalResults / 200);
+              console.log(`   📄 Total pages for ${y}: ${pageCount}`);
+              
+              for (let page = 1; page < pageCount; page++) {
+                const start = page * 200;
+                const pageUrl = `${SCOPUS_BASE_URL}/search/scopus?query=${encodedQuery}&count=200&sort=citedby-count&start=${start}&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description&view=STANDARD`;
+                
+                const pageData = await this.makeRequest(pageUrl);
+                const pageEntries = pageData['search-results']['entry'] || [];
+                console.log(`   📄 Page ${page + 1} for ${y}: ${pageEntries.length} entries`);
+                
+                yearEntries = yearEntries.concat(pageEntries);
+                
+                if (pageEntries.length < 200) {
+                  break;
+                }
+              }
+            }
+            
+            allEntries = allEntries.concat(yearEntries);
+            console.log(`   ✅ Year ${y} complete: ${yearEntries.length} total entries collected`);
+            
+          } catch (yearError) {
+            console.warn(`⚠️ Error fetching data for year ${y}:`, yearError.message);
+            // Continue with next year if one year fails
+            continue;
+          }
+        }
+      } else {
+        // For specific year/date range
+        const startDate = `${year}${startMonth.toString().padStart(2, '0')}01`;
+        const endDate = `${year}${endMonth.toString().padStart(2, '0')}31`;
+        
+        const isFullYear = (startMonth === 1 && endMonth === 12);
+        let searchQuery;
+        
+        if (isFullYear) {
+          searchQuery = `AF-ID("60103917") AND PUBYEAR = ${year}`;
+          console.log(`📊 Using year filtering: ${searchQuery}`);
+        } else {
+          searchQuery = `AF-ID("60103917") AND PUBDATETXT AFT ${startDate} AND PUBDATETXT BEF ${endDate}`;
+          console.log(`📅 Using date range filtering: ${searchQuery}`);
+        }
+        
+        const encodedQuery = encodeURIComponent(searchQuery);
+        const firstUrl = `${SCOPUS_BASE_URL}/search/scopus?query=${encodedQuery}&count=200&sort=citedby-count&start=0&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description&view=STANDARD`;
+        
+        const firstData = await this.makeRequest(firstUrl);
+        const totalResults = parseInt(firstData['search-results']['opensearch:totalResults']) || 0;
+        const firstEntries = firstData['search-results']['entry'] || [];
+        allEntries = allEntries.concat(firstEntries);
+        
+        console.log(`Results for year/period - Total: ${totalResults}, First batch: ${firstEntries.length}`);
+        
+        // Fetch additional pages if needed
+        if (totalResults > 200) {
+          const pageCount = Math.ceil(totalResults / 200);
+          
+          for (let page = 1; page < pageCount; page++) {
+            const start = page * 200;
+            const pageUrl = `${SCOPUS_BASE_URL}/search/scopus?query=${encodedQuery}&count=200&sort=citedby-count&start=${start}&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description&view=STANDARD`;
+            
+            const pageData = await this.makeRequest(pageUrl);
+            const pageEntries = pageData['search-results']['entry'] || [];
+            allEntries = allEntries.concat(pageEntries);
+            
+            if (pageEntries.length < 200) {
+              break;
+            }
+          }
+        }
+      }
+      
+      console.log(`📦 Total entries collected: ${allEntries.length}`);
+
+      // Process the publications
+      const processedPublications = this.processPublications(allEntries, isOverall ? null : year, isOverall ? null : startMonth, isOverall ? null : endMonth);
+      console.log(`✅ Processed institute publications: ${processedPublications.length}`);
+
+      // Calculate statistics for the institute
+      const journalStats = this.calculateJournalStats(processedPublications);
+      const openAccessStats = this.calculateOpenAccessStats(processedPublications);
+
+      const result = {
+        articles: processedPublications,
+        totalCount: processedPublications.length,
+        journalStats: journalStats,
+        openAccessStats: openAccessStats
+      };
+
+      console.log(`Institute-wide result:`, result);
+      return result;
+
+    } catch (error) {
+      console.error('Error fetching institute research data:', error);
+      throw new Error(`Failed to fetch institute research data: ${error.message}`);
+    }
+  }
 }
 
 export default new ScopusApiService();

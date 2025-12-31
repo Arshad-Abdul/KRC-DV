@@ -106,28 +106,91 @@ const isIITHFaculty = (authorName) => {
 
 // API URLs Configuration
 const API_URLS = {
-  institute_profile: `https://api.openalex.org/institutions/${INSTITUTION_ID}`,
-  open_access: `https://api.openalex.org/works?group_by=open_access.is_oa&per_page=200&filter=authorships.institutions.lineage:${INSTITUTION_ID}`,
-  top_authors: `https://api.openalex.org/authors?filter=affiliations.institution.id:${INSTITUTION_ID}&sort=works_count:desc&per_page=200`,
-  top_citations: `https://api.openalex.org/works?page=1&filter=authorships.institutions.lineage:${INSTITUTION_ID},publication_year:2008-,cited_by_count:10-10000&per_page=50`,
-  primary_topics: `https://api.openalex.org/works?group_by=primary_topic.field.id&per_page=200&filter=authorships.institutions.lineage:${INSTITUTION_ID}`,
-  yearly_citations: `https://api.openalex.org/institutions/${INSTITUTION_ID}`,
-  yearly_data: `https://api.openalex.org/institutions/${INSTITUTION_ID}`,
-  collaborator_countries: `https://api.openalex.org/works?group_by=authorships.countries&per_page=200&filter=authorships.countries:countries/in,authorships.institutions.lineage:${INSTITUTION_ID}`,
-  collaborator_institutions: `https://api.openalex.org/works?group_by=authorships.institutions.lineage&per_page=200&filter=authorships.institutions.lineage:${INSTITUTION_ID}`,
-  source_types: `https://api.openalex.org/works?group_by=primary_location.source.type&per_page=200&filter=authorships.institutions.lineage:${INSTITUTION_ID}`,
-  work_types: `https://api.openalex.org/works?group_by=type&per_page=200&filter=authorships.institutions.lineage:${INSTITUTION_ID}`,
-  latest_publications: `https://api.openalex.org/works?filter=institutions.id:${INSTITUTION_ID}&sort=publication_year:desc&per-page=10`,
-  publishers: `https://api.openalex.org/works?group_by=primary_location.source.publisher_lineage&per_page=25&filter=authorships.institutions.lineage:${INSTITUTION_ID}`,
-  funding_agencies: `https://api.openalex.org/works?group_by=grants.funder&per_page=200&filter=authorships.institutions.lineage:${INSTITUTION_ID}`
+ institute_profile: `https://api.openalex.org/institutions/${INSTITUTION_ID}?data-version=2`,
+    
+    // Open Access Status (Filter by Institution ID and group by OA status)
+    open_access: `https://api.openalex.org/works?group_by=open_access.is_oa&per_page=200&filter=authorships.institutions.id:${INSTITUTION_ID}&data-version=2`,
+    
+    // Top Authors (Filter authors by affiliation institution ID)
+    top_authors: `https://api.openalex.org/authors?filter=affiliations.institution.id:${INSTITUTION_ID}&sort=works_count:desc&per_page=200&data-version=2`,
+    
+    // Top Citations (Uses institutions.id for current affiliations, keeping 'cited_by_count' filter)
+    top_citations: `https://api.openalex.org/works?page=1&filter=authorships.institutions.id:${INSTITUTION_ID},publication_year:2008-,cited_by_count:10-10000&sort=cited_by_count:desc&per_page=50&data-version=2`,
+    
+    // Primary Topics (Group by the top-level 'concept.field.id' (Level 0) or simple 'concept.id')
+    // We'll use the main concept ID filter and group for simplicity
+    primary_topics: `https://api.openalex.org/works?group_by=concepts.id&per_page=200&filter=authorships.institutions.id:${INSTITUTION_ID}&data-version=2`,
+    
+    // Yearly Citations (Use the direct 'counts_by_year' from the institution profile)
+    yearly_citations: `https://api.openalex.org/institutions/${INSTITUTION_ID}?select=id,counts_by_year&data-version=2`,
+    
+    // Yearly Works (Also available in 'counts_by_year' on the institution profile)
+    yearly_data: `https://api.openalex.org/institutions/${INSTITUTION_ID}?select=id,counts_by_year&data-version=2`,
+    
+    // Collaborator Countries (Filter by the institution's works and group by country code)
+    collaborator_countries: `https://api.openalex.org/works?group_by=authorships.countries&per_page=200&filter=authorships.institutions.id:${INSTITUTION_ID}&data-version=2`,
+    
+    // Collaborator Institutions (Group by institution ID, filter out the target institution for a cleaner collaborator list)
+    collaborator_institutions: `https://api.openalex.org/works?group_by=authorships.institutions.id&per_page=200&filter=authorships.institutions.id:${INSTITUTION_ID}&data-version=2`,
+    
+    // Source Types (Group by where the work is published/hosted)
+    source_types: `https://api.openalex.org/works?group_by=primary_location.source.type&per_page=200&filter=authorships.institutions.id:${INSTITUTION_ID}&data-version=2`,
+    
+    // Work Types (Group by the type of scholarly work)
+    work_types: `https://api.openalex.org/works?group_by=type&per_page=200&filter=authorships.institutions.id:${INSTITUTION_ID}&data-version=2`,
+    
+    // Latest Publications (Sort by publication year)
+    latest_publications: `https://api.openalex.org/works?filter=authorships.institutions.id:${INSTITUTION_ID}&sort=publication_year:desc&per_page=100&data-version=2`,
+    
+    // Publishers (Get works to manually group by publisher)
+    publishers: `https://api.openalex.org/works?filter=authorships.institutions.id:${INSTITUTION_ID}&per_page=200&sort=publication_year:desc&data-version=2`,
+    
+    // Funding Agencies (Get works to manually extract and group by funder)
+    funding_agencies: `https://api.openalex.org/works?filter=authorships.institutions.id:${INSTITUTION_ID}&per_page=200&sort=publication_year:desc&data-version=2`
 };
 
-// Utility function to make API calls with error handling
+// Utility function to make API calls with error handling and better rate limiting
 async function fetchFromAPI(url, retries = 3) {
+  // Persistent localStorage cache with expiration
+  const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+  const cacheKey = `openalex_cache_${btoa(url)}`;
+  
+  // Check cache first
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < CACHE_DURATION) {
+        console.log(`📋 Using cached data for: ${url}`);
+        return data;
+      }
+    }
+  } catch (e) {
+    // Ignore cache errors
+  }
+
   for (let i = 0; i < retries; i++) {
     try {
-      console.log(`Fetching: ${url}`);
-      const response = await fetch(url);
+      console.log(`🔄 Fetching (attempt ${i + 1}): ${url}`);
+      
+      // Add longer initial delay to respect rate limits
+      if (i === 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'KRC-Dashboard/1.0 (https://iith.ac.in)'
+        }
+      });
+      
+      if (response.status === 429) {
+        // Rate limited - wait longer before retry
+        const waitTime = Math.min(10000 * Math.pow(2, i), 60000); // Max 60s
+        console.warn(`⚠️ Rate limited, waiting ${waitTime}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -135,14 +198,30 @@ async function fetchFromAPI(url, retries = 3) {
       
       const data = await response.json();
       
-      // Add delay between requests to be respectful to the API
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Cache successful response
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({
+          data,
+          timestamp: Date.now()
+        }));
+      } catch (e) {
+        // Ignore cache storage errors
+      }
+      
+      // Longer delay between successful requests
+      await new Promise(resolve => setTimeout(resolve, 3000));
       
       return data;
     } catch (error) {
-      console.warn(`Attempt ${i + 1} failed for ${url}:`, error.message);
+      console.warn(`❌ Attempt ${i + 1} failed for ${url}:`, error.message);
       if (i === retries - 1) throw error;
-      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
+      
+      // Exponential backoff with jitter
+      const baseDelay = 5000 * Math.pow(2, i);
+      const jitter = Math.random() * 2000;
+      const delay = baseDelay + jitter;
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 }
@@ -190,7 +269,17 @@ export const apiService = {
   // Get latest publications
   async getLatestPublications() {
     const data = await fetchFromAPI(API_URLS.latest_publications);
-    return (data.results || []).map(work => ({
+    
+    // Filter publications to only include those by IITH faculty
+    const facultyPublications = (data.results || []).filter(work => {
+      // Check if any author in the publication is an IITH faculty member
+      return work.authorships?.some(authorship => {
+        const authorName = authorship.author?.display_name;
+        return isIITHFaculty(authorName);
+      });
+    });
+    
+    return facultyPublications.map(work => ({
       id: work.id,
       title: work.title || 'Untitled',
       authors: work.authorships?.slice(0, 3).map(a => a.author?.display_name || 'Unknown').join(', ') || 'Unknown authors',
@@ -386,144 +475,254 @@ export const apiService = {
 
   // Get top publishers
   async getTopPublishers() {
-    const data = await fetchFromAPI(API_URLS.publishers);
-    const groups = data.group_by || [];
-    
-    // Get publisher details for top 10 only
-    const publishersWithDetails = await Promise.all(
-      groups.slice(0, 10).map(async (group) => {
+    try {
+      const data = await fetchFromAPI(API_URLS.publishers);
+      console.log('📊 Publishers API response works count:', data.results?.length);
+      
+      if (!data.results || data.results.length === 0) {
+        console.warn('⚠️ No works found for publisher grouping');
+        return [];
+      }
+      
+      // Manually group by publisher
+      const publisherMap = {};
+      
+      data.results.forEach(work => {
         try {
-          if (group.key && group.key !== 'null') {
-            const publisherId = group.key.replace('https://openalex.org/', '');
-            const publisherData = await fetchFromAPI(`https://api.openalex.org/publishers/${publisherId}`);
-            return {
-              publisher: publisherData.display_name || 'Unknown Publisher',
-              count: group.count
-            };
-          } else {
-            return {
-              publisher: 'Unknown Publisher',
-              count: group.count
-            };
+          const publisherName = work.primary_location?.source?.display_name || 'Unknown Publisher';
+          const publisherId = work.primary_location?.source?.id;
+          
+          if (publisherName && publisherName !== 'Unknown Publisher') {
+            if (!publisherMap[publisherName]) {
+              publisherMap[publisherName] = {
+                publisher: publisherName,
+                count: 0,
+                id: publisherId
+              };
+            }
+            publisherMap[publisherName].count++;
           }
         } catch (error) {
-          return {
-            publisher: group.key_display_name || 'Unknown Publisher',
-            count: group.count
-          };
+          console.warn('⚠️ Error processing work for publisher:', error);
         }
-      })
-    );
-
-
-    
-    // Sort by count in descending order (largest to smallest)
-    return publishersWithDetails.sort();
+      });
+      
+      // Convert to array and sort by count
+      const publishers = Object.values(publisherMap)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+      
+      console.log('📊 Top publishers extracted:', publishers);
+      
+      return publishers;
+    } catch (error) {
+      console.error('❌ Error in getTopPublishers:', error);
+      return [];
+    }
   },
 
   // Get top funding agencies
   async getFundingAgencies() {
-    const data = await fetchFromAPI(API_URLS.funding_agencies);
-    const groups = data.group_by || [];
-    
-    // Function to add acronyms to funding agency names
-    const addAcronym = (name) => {
-      const acronymMap = {
-        'Department of Science and Technology': 'DST',
-        'Ministry of Education': 'MoE',
-        'Council of Scientific and Industrial Research': 'CSIR',
-        'Department of Energy': 'DoE',
-        'National Science Foundation': 'NSF',
-        'Department of Biotechnology': 'DBT',
-        'Indian Council of Medical Research': 'ICMR',
-        'University Grants Commission': 'UGC',
-        'Defence Research and Development Organisation': 'DRDO',
-        'Indian Space Research Organisation': 'ISRO',
-        'All India Council for Technical Education': 'AICTE',
-        'Science and Engineering Research Board': 'SERB',
-        'Technology Development Board': 'TDB',
-        'Indian Council of Agricultural Research': 'ICAR',
-        'Ministry of Electronics and Information Technology': 'MeitY',
-        'Department of Atomic Energy': 'DAE',
-        'Indian Institute of Technology': 'IIT',
-        'National Institutes of Health': 'NIH',
-        'European Commission': 'EC',
-        'Department of Health and Human Services': 'HHS',
-        'Ministry of Human Resource Development': 'MHRD',
-        'Indian National Science Academy': 'INSA',
-        'Bhabha Atomic Research Centre': 'BARC',
-        'Indian Statistical Institute': 'ISI',
-        'Indian Institute of Science': 'IISc'
+    try {
+      const data = await fetchFromAPI(API_URLS.funding_agencies);
+      console.log('💰 Funding agencies API response works count:', data.results?.length);
+      
+      if (!data.results || data.results.length === 0) {
+        console.warn('⚠️ No works found for funding grouping');
+        return [];
+      }
+      
+      // Manually group by funder
+      const funderMap = {};
+      
+      data.results.forEach(work => {
+        try {
+          const grants = work.grants || [];
+          grants.forEach(grant => {
+            if (grant.funder && grant.funder.display_name) {
+              const funderName = grant.funder.display_name;
+              
+              if (!funderMap[funderName]) {
+                funderMap[funderName] = {
+                  name: funderName,
+                  count: 0,
+                  id: grant.funder.id
+                };
+              }
+              funderMap[funderName].count++;
+            }
+          });
+        } catch (error) {
+          console.warn('⚠️ Error processing work for funding:', error);
+        }
+      });
+      
+      // Function to add acronyms to funding agency names
+      const addAcronym = (name) => {
+        if (!name) return 'Unknown Agency';
+        
+        const acronymMap = {
+          'Department of Science and Technology': 'DST',
+          'Ministry of Education': 'MoE',
+          'Council of Scientific and Industrial Research': 'CSIR',
+          'Department of Energy': 'DoE',
+          'National Science Foundation': 'NSF',
+          'Department of Biotechnology': 'DBT',
+          'Indian Council of Medical Research': 'ICMR',
+          'University Grants Commission': 'UGC',
+          'Defence Research and Development Organisation': 'DRDO',
+          'Indian Space Research Organisation': 'ISRO',
+          'All India Council for Technical Education': 'AICTE',
+          'Science and Engineering Research Board': 'SERB',
+          'Technology Development Board': 'TDB',
+          'Indian Council of Agricultural Research': 'ICAR',
+          'Ministry of Electronics and Information Technology': 'MeitY',
+          'Department of Atomic Energy': 'DAE',
+          'Indian Institute of Technology': 'IIT',
+          'National Institutes of Health': 'NIH',
+          'European Commission': 'EC',
+          'Department of Health and Human Services': 'HHS',
+          'Ministry of Human Resource Development': 'MHRD',
+          'Indian National Science Academy': 'INSA',
+          'Bhabha Atomic Research Centre': 'BARC',
+          'Indian Statistical Institute': 'ISI',
+          'Indian Institute of Science': 'IISc'
+        };
+        
+        // Check for partial matches and add acronyms
+        for (const [fullName, acronym] of Object.entries(acronymMap)) {
+          if (name.toLowerCase().includes(fullName.toLowerCase())) {
+            return `${name} (${acronym})`;
+          }
+        }
+        
+        // If no match found, try to extract common patterns
+        const words = name.split(' ').filter(word => word.length > 2);
+        if (words.length >= 2 && words.length <= 4) {
+          const potentialAcronym = words.map(word => word.charAt(0).toUpperCase()).join('');
+          if (potentialAcronym.length >= 2 && potentialAcronym.length <= 5) {
+            return `${name} (${potentialAcronym})`;
+          }
+        }
+        
+        return name;
       };
       
-      // Check for partial matches and add acronyms
-      for (const [fullName, acronym] of Object.entries(acronymMap)) {
-        if (name.toLowerCase().includes(fullName.toLowerCase())) {
-          return `${name} (${acronym})`;
-        }
-      }
+      // Convert to array, sort by count, and take top 10
+      const fundingAgencies = Object.values(funderMap)
+        .map(funder => ({
+          name: addAcronym(funder.name),
+          count: funder.count
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
       
-      // If no match found, try to extract common patterns
-      const words = name.split(' ').filter(word => word.length > 2);
-      if (words.length >= 2 && words.length <= 4) {
-        const potentialAcronym = words.map(word => word.charAt(0).toUpperCase()).join('');
-        if (potentialAcronym.length >= 2 && potentialAcronym.length <= 5) {
-          return `${name} (${potentialAcronym})`;
-        }
-      }
+      console.log('💰 Top funding agencies extracted:', fundingAgencies);
       
-      return name;
-    };
-    
-    // Process funding agencies data
-    const fundingAgencies = groups.slice(0, 10).map(group => ({
-      name: addAcronym(group.key_display_name || 'Unknown Agency'),
-      count: group.count || 0
-    }));
-    
-    return fundingAgencies;
+      return fundingAgencies;
+    } catch (error) {
+      console.error('❌ Error in getFundingAgencies:', error);
+      return [];
+    }
   },
 
   // Get all dashboard data
   async getAllDashboardData() {
+    const startTime = Date.now();
+    console.log('🚀 Starting dashboard data fetch...');
+    
+    // Fallback data structure
+    const fallbackData = {
+      totalPublications: 0,
+      totalCitations: 0,
+      hIndex: 0,
+      openAccessCount: 0,
+      latestPublications: [],
+      topContributors: [],
+      yearlyPublications: [],
+      yearlyCitations: [],
+      subjectDistribution: [],
+      topCitedPublications: [],
+      collaboratorCountries: [],
+      publicationTypes: [],
+      topPublishers: [],
+      fundingAgencies: []
+    };
+
+    // Helper to safely fetch data with fallback
+    const safeFetch = async (fetchFunction, fallbackValue, name) => {
+      try {
+        console.log(`📊 Fetching ${name}...`);
+        const result = await fetchFunction();
+        console.log(`✅ ${name} completed`);
+        return result;
+      } catch (error) {
+        console.warn(`⚠️ Failed to fetch ${name}:`, error.message);
+        return fallbackValue;
+      }
+    };
+
+    // Helper to delay between requests
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
     try {
-      console.log('Fetching all dashboard data...');
-      
+      // Fetch core data first (most important)
+      const profile = await safeFetch(
+        () => this.getInstitutionProfile(),
+        { name: 'IIT Hyderabad', works_count: 0, cited_by_count: 0, h_index: 0 },
+        'Institution Profile'
+      );
+
+      await delay(3000);
+
+      // Fetch other data with longer delays
       const [
-        profile,
         openAccessCount,
         latestPublications,
         topContributors,
-        yearlyPublications,
+        yearlyPublications
+      ] = await Promise.all([
+        safeFetch(() => this.getOpenAccessStats(), 0, 'Open Access Stats'),
+        safeFetch(() => this.getLatestPublications(), [], 'Latest Publications'),
+        safeFetch(() => this.getTopContributors(), [], 'Top Contributors'),
+        safeFetch(() => this.getYearlyPublications(), [], 'Yearly Publications')
+      ]);
+
+      await delay(5000);
+
+      const [
         yearlyCitations,
         subjectDistribution,
         topCitedPublications,
-        collaboratorCountries,
+        collaboratorCountries
+      ] = await Promise.all([
+        safeFetch(() => this.getYearlyCitations(), [], 'Yearly Citations'),
+        safeFetch(() => this.getSubjectDistribution(), [], 'Subject Distribution'),
+        safeFetch(() => this.getTopCitedPublications(), [], 'Top Cited Publications'),
+        safeFetch(() => this.getCollaboratorCountries(), [], 'Collaborator Countries')
+      ]);
+
+      await delay(5000);
+
+      const [
         publicationTypes,
         topPublishers,
         fundingAgencies
       ] = await Promise.all([
-        this.getInstitutionProfile(),
-        this.getOpenAccessStats(),
-        this.getLatestPublications(),
-        this.getTopContributors(),
-        this.getYearlyPublications(),
-        this.getYearlyCitations(),
-        this.getSubjectDistribution(),
-        this.getTopCitedPublications(),
-        this.getCollaboratorCountries(),
-        this.getPublicationTypes(),
-        this.getTopPublishers(),
-        this.getFundingAgencies()
+        safeFetch(() => this.getPublicationTypes(), [], 'Publication Types'),
+        safeFetch(() => this.getTopPublishers(), [], 'Top Publishers'),
+        safeFetch(() => this.getFundingAgencies(), [], 'Funding Agencies')
       ]);
+
+      const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.log(`🎉 Dashboard data fetch completed in ${elapsedTime}s`);
 
       return {
         // Summary stats
-        totalPublications: profile.works_count,
-        totalCitations: profile.cited_by_count,
-        hIndex: profile.h_index,
+        totalPublications: profile.works_count || 0,
+        totalCitations: profile.cited_by_count || 0,
+        hIndex: profile.h_index || 0,
         openAccessCount,
-        
         // Detailed data
         latestPublications,
         topContributors,
@@ -537,8 +736,10 @@ export const apiService = {
         fundingAgencies
       };
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      throw error;
+      console.error('💥 Critical error in getAllDashboardData:', error);
+      // Return fallback data instead of throwing
+      console.log('🔄 Returning fallback data...');
+      return fallbackData;
     }
   }
 };

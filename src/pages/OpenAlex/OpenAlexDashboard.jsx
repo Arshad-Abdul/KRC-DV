@@ -344,73 +344,83 @@ export default function OpenAlexDashboard() {
         {/* 10. Top Publishers */}
         <DashboardBox title="Top 10 Publishers" loading={loading}>
           <div className="chart-container">
-            <Plot
-              data={[{
-                x: dashboardData.topPublishers.slice(0, 15).map(p => p.count).sort((a, b) => a - b),
-                y: dashboardData.topPublishers.slice(0, 15).map(p => 
-                  p.publisher.length > 35 ? p.publisher.substring(0, 35) + '...' : p.publisher
-                ).sort(),
-                type: 'bar',
-                orientation: 'h',
-                marker: { color: '#06b6d4' },
-                text: dashboardData.topPublishers.slice(0, 15).map(p => p.count).sort((a, b) => a - b),
-                textposition: 'inside'
-              }]}
-              layout={{
-                height: 400,
-                margin: { l: 180, r: 50, t: 20, b: 50 },
-                // xaxis: { title: 'Number of Publications' },
-                // yaxis: { title: '' },
-                font: { size: 10 }
-              }}
-              config={{ responsive: true, displayModeBar: false }}
-              style={{ width: '100%', height: '400px' }}
-            />
+            {dashboardData.topPublishers && dashboardData.topPublishers.length > 0 ? (
+              <Plot
+                data={[{
+                  x: dashboardData.topPublishers.slice(0, 10).map(p => p.count),
+                  y: dashboardData.topPublishers.slice(0, 10).map(p => 
+                    p.publisher.length > 40 ? p.publisher.substring(0, 40) + '...' : p.publisher
+                  ),
+                  type: 'bar',
+                  orientation: 'h',
+                  marker: { color: '#06b6d4' },
+                  text: dashboardData.topPublishers.slice(0, 10).map(p => p.count),
+                  textposition: 'inside'
+                }]}
+                layout={{
+                  height: 400,
+                  margin: { l: 200, r: 50, t: 20, b: 50 },
+                  font: { size: 10 }
+                }}
+                config={{ responsive: true, displayModeBar: false }}
+                style={{ width: '100%', height: '400px' }}
+              />
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                <p>No publisher data available</p>
+              </div>
+            )}
           </div>
         </DashboardBox>
 
         {/* 11. Top Ten Funding Agencies */}
         <DashboardBox title="Top 10 Funding Agencies" loading={loading}>
           <div className="chart-container">
-            <Plot
-              data={[{
-                x: dashboardData.fundingAgencies.map(f => 
-                  f.name.length > 30 ? f.name.substring(0, 30) + '...' : f.name
-                ),
-                y: dashboardData.fundingAgencies.map(f => f.count),
-                type: 'bar',
-                marker: { 
-                  color: dashboardData.fundingAgencies.map((_, index) => {
-                    const colors = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444',
-                                   '#8b5cf6', '#84cc16', '#f97316', '#ec4899', '#6366f1'];
-                    return colors[index % colors.length];
-                  }),
-                  line: { width: 1, color: '#ffffff' }
-                },
-                text: dashboardData.fundingAgencies.map(f => f.count),
-                textposition: 'inside',
-                hovertemplate: '<b>%{x}</b><br>Grants: %{y}<extra></extra>'
-              }]}
-              layout={{
-                height: 400,
-                margin: { l: 50, r: 50, t: 20, b: 150 },
-                xaxis: { 
-                  title: 'Funding Agency',
-                  tickangle: -45,
-                  tickfont: { size: 10 }
-                },
-                yaxis: { 
-                  title: 'Number of Grants',
-                  gridcolor: '#e2e8f0',
-                  showgrid: true
-                },
-                font: { size: 11 },
-                plot_bgcolor: '#ffffff',
-                paper_bgcolor: '#ffffff'
-              }}
-              config={{ responsive: true, displayModeBar: false }}
-              style={{ width: '100%', height: '400px' }}
-            />
+            {dashboardData.fundingAgencies && dashboardData.fundingAgencies.length > 0 ? (
+              <Plot
+                data={[{
+                  x: dashboardData.fundingAgencies.map(f => 
+                    f.name.length > 30 ? f.name.substring(0, 30) + '...' : f.name
+                  ),
+                  y: dashboardData.fundingAgencies.map(f => f.count),
+                  type: 'bar',
+                  marker: { 
+                    color: dashboardData.fundingAgencies.map((_, index) => {
+                      const colors = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444',
+                                     '#8b5cf6', '#84cc16', '#f97316', '#ec4899', '#6366f1'];
+                      return colors[index % colors.length];
+                    }),
+                    line: { width: 1, color: '#ffffff' }
+                  },
+                  text: dashboardData.fundingAgencies.map(f => f.count),
+                  textposition: 'inside',
+                  hovertemplate: '<b>%{x}</b><br>Grants: %{y}<extra></extra>'
+                }]}
+                layout={{
+                  height: 400,
+                  margin: { l: 50, r: 50, t: 20, b: 150 },
+                  xaxis: { 
+                    title: 'Funding Agency',
+                    tickangle: -45,
+                    tickfont: { size: 10 }
+                  },
+                  yaxis: { 
+                    title: 'Number of Grants',
+                    gridcolor: '#e2e8f0',
+                    showgrid: true
+                  },
+                  font: { size: 11 },
+                  plot_bgcolor: '#ffffff',
+                  paper_bgcolor: '#ffffff'
+                }}
+                config={{ responsive: true, displayModeBar: false }}
+                style={{ width: '100%', height: '400px' }}
+              />
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                <p>No funding agency data available</p>
+              </div>
+            )}
           </div>
         </DashboardBox>
       </div>
