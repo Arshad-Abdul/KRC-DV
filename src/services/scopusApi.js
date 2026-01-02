@@ -114,7 +114,7 @@ class ScopusApiService {
         
         const encodedQuery = encodeURIComponent(searchQuery);
         // Include DOI and document type fields - using correct Scopus field names
-        const url = `${SCOPUS_BASE_URL}/search/scopus?query=${encodedQuery}&count=200&sort=citedby-count&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description&view=STANDARD`;
+        const url = `${SCOPUS_BASE_URL}/search/scopus?query=${encodedQuery}&count=200&sort=citedby-count&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description,prism:volume,prism:issueIdentifier,prism:pageRange,prism:issn&view=STANDARD`;
 
         const data = await this.makeRequest(url);
         
@@ -133,7 +133,7 @@ class ScopusApiService {
           const fallbackQuery = `${authorQuery} AND PUBYEAR = ${year}`;
           console.log('🔄 Fallback query for first batch:', fallbackQuery);
           
-          const fallbackUrl = `${SCOPUS_BASE_URL}/search/scopus?query=${encodeURIComponent(fallbackQuery)}&count=200&sort=citedby-count&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description&view=STANDARD`;
+          const fallbackUrl = `${SCOPUS_BASE_URL}/search/scopus?query=${encodeURIComponent(fallbackQuery)}&count=200&sort=citedby-count&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description,prism:volume,prism:issueIdentifier,prism:pageRange,prism:issn&view=STANDARD`;
           const fallbackData = await this.makeRequest(fallbackUrl);
           
           const fallbackResults = parseInt(fallbackData['search-results']['opensearch:totalResults']) || 0;
@@ -251,6 +251,19 @@ class ScopusApiService {
       // Extract document type - try different possible field names
       const documentType = entry['subtypeDescription'] || entry['subtype'] || entry['prism:aggregationType'] || 'Article';
 
+      // Extract volume, issue, and page information
+      const volume = entry['prism:volume'] || '';
+      const issue = entry['prism:issueIdentifier'] || '';
+      const pageRange = entry['prism:pageRange'] || '';
+      const issn = entry['prism:issn'] || '';
+      
+      // Combine volume/issue/pages into single field
+      let volumeIssuePages = [];
+      if (volume) volumeIssuePages.push(`Vol. ${volume}`);
+      if (issue) volumeIssuePages.push(`Issue ${issue}`);
+      if (pageRange) volumeIssuePages.push(`pp. ${pageRange}`);
+      const volumeInfo = volumeIssuePages.length > 0 ? volumeIssuePages.join(', ') : '';
+
       return {
         id: index + 1,
         title: entry['dc:title'] || 'Untitled',
@@ -264,8 +277,13 @@ class ScopusApiService {
         citedByCount: parseInt(entry['citedby-count']) || 0,
         scopusId: scopusId,
         keywords: entry['authkeywords'] || '',
-        abstract: entry['dc:description'] ? entry['dc:description'].substring(0, 200) + '...' : '',
-        documentType: documentType
+        abstract: entry['dc:description'] ? entry['dc:description'].substring(0, 500) : '',
+        documentType: documentType,
+        volume: volume,
+        issue: issue,
+        pageRange: pageRange,
+        volumeInfo: volumeInfo,
+        issn: issn
       };
     })
     .filter(pub => {
@@ -433,7 +451,7 @@ class ScopusApiService {
             let totalResults = 0;
             
             // First request for this year
-            const firstUrl = `${SCOPUS_BASE_URL}/search/scopus?query=${encodedQuery}&count=200&sort=citedby-count&start=0&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description&view=STANDARD`;
+            const firstUrl = `${SCOPUS_BASE_URL}/search/scopus?query=${encodedQuery}&count=200&sort=citedby-count&start=0&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description,prism:volume,prism:issueIdentifier,prism:pageRange,prism:issn&view=STANDARD`;
             
             const firstData = await this.makeRequest(firstUrl);
             totalResults = parseInt(firstData['search-results']['opensearch:totalResults']) || 0;
@@ -449,7 +467,7 @@ class ScopusApiService {
               
               for (let page = 1; page < pageCount; page++) {
                 const start = page * 200;
-                const pageUrl = `${SCOPUS_BASE_URL}/search/scopus?query=${encodedQuery}&count=200&sort=citedby-count&start=${start}&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description&view=STANDARD`;
+                const pageUrl = `${SCOPUS_BASE_URL}/search/scopus?query=${encodedQuery}&count=200&sort=citedby-count&start=${start}&field=dc:identifier,dc:title,dc:creator,prism:publicationName,prism:coverDate,citedby-count,openaccess,prism:doi,subtypeDescription,prism:aggregationType,authkeywords,dc:description,prism:volume,prism:issueIdentifier,prism:pageRange,prism:issn&view=STANDARD`;
                 
                 const pageData = await this.makeRequest(pageUrl);
                 const pageEntries = pageData['search-results']['entry'] || [];

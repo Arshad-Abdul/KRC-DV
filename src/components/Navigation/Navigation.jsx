@@ -25,6 +25,12 @@ const Navigation = () => {
       >
         Institute Statistics
       </Link>
+      <Link 
+        to="/download-publications" 
+        className={`nav-link ${location.pathname === '/download-publications' ? 'active' : ''}`}
+      >
+        Download Publications
+      </Link>
       <a 
         href="https://raiith.krc.iith.ac.in/" 
         target="_blank" 
